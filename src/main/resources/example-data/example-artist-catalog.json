@@ -1,0 +1,41 @@
+{
+  "type": "AMAZON.MusicGroup",
+  "version": 2.0,
+  "locales": [
+    {
+      "country": "US",
+      "language": "en"
+    }
+  ],
+  "entities": [
+    {
+      "id": "artist.002",
+      "names": [
+        {
+          "language": "en",
+          "value": "U2"
+        }
+      ],
+      "popularity": {
+        "default": 100,
+        "overrides": [
+          {
+            "locale": {
+              "country": "US",
+              "language": "en"
+            },
+            "value": 100
+          }
+        ]
+      },
+      "lastUpdatedTime": "2018-08-01T00:00:00.000Z",
+      "locales": [
+        {
+          "country": "US",
+          "language": "en"
+        }
+      ],
+      "deleted": false
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Resources:
+  privateMusicAlexaSkill:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      FunctionName: privateMusicAlexaSkill
+      Runtime: java8
+      Handler: PrivateMusicAlexaSkillRequestHandler::handleRequest
+      CodeUri: ./target/lambda.jar
+      MemorySize: 512
+      Timeout: 15
+      Role: 'arn:aws:iam::734785652855:role/lambda_basic_execution'
+      Events:
+        AlexaSkillEvent:
+          Type: AlexaSkill
