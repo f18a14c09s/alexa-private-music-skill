@@ -44,7 +44,7 @@ public class PrivateMusicSkill implements AlexaSkill<Request, Response> {
         }
         request.ifPresent(this::debug);
         return request.map(BaseMessage::getHeader)
-                .map(MessageHeader::toMusicRequestType)
+                .map(messageHeader -> new MusicRequestType(messageHeader.getNamespace(), messageHeader.getName()))
                 .map(skillsByRequestType::get)
                 .map(skill -> skill.invoke(request.get(), context))
                 .map(response -> new BaseSkillResponse(new JacksonJsonMarshaller(), response))
