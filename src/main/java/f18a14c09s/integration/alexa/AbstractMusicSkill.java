@@ -1,8 +1,8 @@
 package f18a14c09s.integration.alexa;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import f18a14c09s.integration.alexa.data.Request;
-import f18a14c09s.integration.alexa.data.Response;
+import f18a14c09s.integration.alexa.music.data.Request;
+import f18a14c09s.integration.alexa.music.data.Response;
 import f18a14c09s.integration.alexa.music.data.MusicRequestType;
 import f18a14c09s.integration.json.JSONAdapter;
 import lombok.AccessLevel;
