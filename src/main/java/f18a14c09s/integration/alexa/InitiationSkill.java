@@ -1,7 +1,7 @@
 package f18a14c09s.integration.alexa;
 
-import f18a14c09s.integration.alexa.music.data.InitiateRequest;
-import f18a14c09s.integration.alexa.music.data.InitiateResponse;
+import f18a14c09s.integration.alexa.music.messaging.data.InitiateRequest;
+import f18a14c09s.integration.alexa.music.messaging.data.InitiateResponse;
 import f18a14c09s.integration.alexa.music.data.MusicRequestType;
 
 import java.io.IOException;

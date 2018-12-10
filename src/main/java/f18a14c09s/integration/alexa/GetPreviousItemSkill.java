@@ -1,7 +1,7 @@
 package f18a14c09s.integration.alexa;
 
-import f18a14c09s.integration.alexa.data.RequestMap;
-import f18a14c09s.integration.alexa.data.ResponseMap;
+import f18a14c09s.integration.alexa.music.messaging.data.RequestMap;
+import f18a14c09s.integration.alexa.music.messaging.data.ResponseMap;
 import f18a14c09s.integration.alexa.music.data.MusicRequestType;
 
 public class GetPreviousItemSkill extends AbstractMusicSkill<RequestMap, ResponseMap> {
