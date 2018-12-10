@@ -25,10 +25,12 @@ public class PrivateMusicSkill implements AlexaSkill<Request, Response> {
             skillsByRequestType;
 
     static {
-        Map<RequestType, AbstractMusicSkill<? extends Request<?>, ? extends Response<?>>> tempMap =
-                new HashMap<>();
+        Map<RequestType, AbstractMusicSkill<? extends Request<?>, ? extends Response<?>>> tempMap = new HashMap<>();
         tempMap.put(new RequestType("Alexa.Media.Search", "GetPlayableContent"), new GetPlayableContentSkill());
         tempMap.put(new RequestType("Alexa.Media.Playback", "Initiate"), new InitiationSkill());
+        tempMap.put(new RequestType("Alexa.Media.PlayQueue", "GetItem"), new GetItemSkill());
+        tempMap.put(new RequestType("Alexa.Media.PlayQueue", "GetPreviousItem"), new GetPreviousItemSkill());
+        tempMap.put(new RequestType("Alexa.Media.PlayQueue", "GetNextItem"), new GetNextItemSkill());
         skillsByRequestType = tempMap;
     }
 

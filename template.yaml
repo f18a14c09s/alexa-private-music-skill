@@ -6,7 +6,7 @@ Resources:
     Properties:
       FunctionName: privateMusicAlexaSkill
       Runtime: java8
-      Handler: PrivateMusicAlexaSkillRequestHandler::handleRequest
+      Handler: f18a14c09s.integration.aws.PrivateMusicAlexaSkillRequestHandler::handleRequest
       CodeUri: ./target/lambda.jar
       MemorySize: 512
       Timeout: 15

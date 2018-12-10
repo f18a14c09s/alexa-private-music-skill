@@ -78,7 +78,6 @@
         },
         "stream": {
           "id": "STREAMID_92_14629004",
-          // TODO: Use a valid URI:
           "uri": "https://cdn.example.com/api/1/a2f318467fbf2829996adc0880e0abd03d03b1ba6ac.mp3",
           "offsetInMilliseconds": 0,
           "validUntil": "2018-05-10T19:11:35Z"

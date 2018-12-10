@@ -1,16 +1,16 @@
 package f18a14c09s.integration.alexa;
 
-import f18a14c09s.integration.alexa.music.messagetypes.RequestMap;
-import f18a14c09s.integration.alexa.music.messagetypes.ResponseMap;
 import f18a14c09s.integration.alexa.music.data.RequestType;
+import f18a14c09s.integration.alexa.music.messagetypes.GetItemRequest;
+import f18a14c09s.integration.alexa.music.messagetypes.GetItemResponse;
 
-public class GetItemSkill extends AbstractMusicSkill<RequestMap, ResponseMap> {
+public class GetItemSkill extends AbstractMusicSkill<GetItemRequest, GetItemResponse> {
     public GetItemSkill() {
-        super(RequestMap.class, new RequestType("Alexa.Media.PlayQueue", "GetItem"));
+        super(GetItemRequest.class, new RequestType("Alexa.Media.PlayQueue", "GetItem"));
     }
 
     @Override
-    protected ResponseMap invokeImpl(RequestMap request, Object context) {
+    protected GetItemResponse invokeImpl(GetItemRequest request, Object context) {
         return null;
     }
 }
