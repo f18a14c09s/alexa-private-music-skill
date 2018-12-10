@@ -7,10 +7,9 @@ import com.amazon.ask.response.impl.BaseSkillResponse;
 import com.amazon.ask.util.impl.JacksonJsonMarshaller;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import f18a14c09s.integration.alexa.data.BaseMessage;
-import f18a14c09s.integration.alexa.data.MessageHeader;
-import f18a14c09s.integration.alexa.data.Request;
-import f18a14c09s.integration.alexa.data.Response;
-import f18a14c09s.integration.alexa.music.data.MusicRequestType;
+import f18a14c09s.integration.alexa.music.data.RequestType;
+import f18a14c09s.integration.alexa.music.messagetypes.Request;
+import f18a14c09s.integration.alexa.music.messagetypes.Response;
 import f18a14c09s.integration.json.JSONAdapter;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -22,14 +21,14 @@ import java.util.*;
 public class PrivateMusicSkill implements AlexaSkill<Request, Response> {
     private static final Logger logger = LogManager.getLogger(MethodHandles.lookup().lookupClass());
     private JSONAdapter jsonAdapter = new JSONAdapter();
-    private static final Map<MusicRequestType, AbstractMusicSkill<? extends Request<?>, ? extends Response<?>>>
+    private static final Map<RequestType, AbstractMusicSkill<? extends Request<?>, ? extends Response<?>>>
             skillsByRequestType;
 
     static {
-        Map<MusicRequestType, AbstractMusicSkill<? extends Request<?>, ? extends Response<?>>> tempMap =
+        Map<RequestType, AbstractMusicSkill<? extends Request<?>, ? extends Response<?>>> tempMap =
                 new HashMap<>();
-        tempMap.put(new MusicRequestType("Alexa.Media.Search", "GetPlayableContent"), new GetPlayableContentSkill());
-        tempMap.put(new MusicRequestType("Alexa.Media.Playback", "Initiate"), new InitiationSkill());
+        tempMap.put(new RequestType("Alexa.Media.Search", "GetPlayableContent"), new GetPlayableContentSkill());
+        tempMap.put(new RequestType("Alexa.Media.Playback", "Initiate"), new InitiationSkill());
         skillsByRequestType = tempMap;
     }
 
@@ -44,7 +43,7 @@ public class PrivateMusicSkill implements AlexaSkill<Request, Response> {
         }
         request.ifPresent(this::debug);
         return request.map(BaseMessage::getHeader)
-                .map(MessageHeader::toMusicRequestType)
+                .map(messageHeader -> new RequestType(messageHeader.getNamespace(), messageHeader.getName()))
                 .map(skillsByRequestType::get)
                 .map(skill -> skill.invoke(request.get(), context))
                 .map(response -> new BaseSkillResponse(new JacksonJsonMarshaller(), response))

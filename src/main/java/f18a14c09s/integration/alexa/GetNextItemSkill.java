@@ -1,12 +1,12 @@
 package f18a14c09s.integration.alexa;
 
-import f18a14c09s.integration.alexa.data.RequestMap;
-import f18a14c09s.integration.alexa.data.ResponseMap;
-import f18a14c09s.integration.alexa.music.data.MusicRequestType;
+import f18a14c09s.integration.alexa.music.messagetypes.RequestMap;
+import f18a14c09s.integration.alexa.music.messagetypes.ResponseMap;
+import f18a14c09s.integration.alexa.music.data.RequestType;
 
 public class GetNextItemSkill extends AbstractMusicSkill<RequestMap, ResponseMap> {
     public GetNextItemSkill() {
-        super(RequestMap.class, new MusicRequestType("Alexa.Audio.PlayQueue", "GetNextItem"));
+        super(RequestMap.class, new RequestType("Alexa.Audio.PlayQueue", "GetNextItem"));
     }
 
     @Override

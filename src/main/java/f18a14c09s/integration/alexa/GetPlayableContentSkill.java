@@ -1,14 +1,14 @@
 package f18a14c09s.integration.alexa;
 
-import f18a14c09s.integration.alexa.music.data.GetPlayableContentRequest;
-import f18a14c09s.integration.alexa.music.data.GetPlayableContentResponse;
-import f18a14c09s.integration.alexa.music.data.MusicRequestType;
+import f18a14c09s.integration.alexa.music.messagetypes.GetPlayableContentRequest;
+import f18a14c09s.integration.alexa.music.messagetypes.GetPlayableContentResponse;
+import f18a14c09s.integration.alexa.music.data.RequestType;
 
 import java.io.IOException;
 
 public class GetPlayableContentSkill extends AbstractMusicSkill<GetPlayableContentRequest, GetPlayableContentResponse> {
     public GetPlayableContentSkill() {
-        super(GetPlayableContentRequest.class, new MusicRequestType("Alexa.Media.Search", "GetPlayableContent"));
+        super(GetPlayableContentRequest.class, new RequestType("Alexa.Media.Search", "GetPlayableContent"));
     }
 
     @Override

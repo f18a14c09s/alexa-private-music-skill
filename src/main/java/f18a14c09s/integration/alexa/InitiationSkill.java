@@ -1,14 +1,14 @@
 package f18a14c09s.integration.alexa;
 
-import f18a14c09s.integration.alexa.music.data.InitiateRequest;
-import f18a14c09s.integration.alexa.music.data.InitiateResponse;
-import f18a14c09s.integration.alexa.music.data.MusicRequestType;
+import f18a14c09s.integration.alexa.music.data.RequestType;
+import f18a14c09s.integration.alexa.music.messagetypes.InitiateRequest;
+import f18a14c09s.integration.alexa.music.messagetypes.InitiateResponse;
 
 import java.io.IOException;
 
 public class InitiationSkill extends AbstractMusicSkill<InitiateRequest, InitiateResponse> {
     public InitiationSkill() {
-        super(InitiateRequest.class, new MusicRequestType("Alexa.Media.Playback", "Initiate"));
+        super(InitiateRequest.class, new RequestType("Alexa.Media.Playback", "Initiate"));
     }
 
     @Override
