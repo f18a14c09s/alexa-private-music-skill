@@ -1,9 +1,9 @@
 package f18a14c09s.integration.alexa;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import f18a14c09s.integration.alexa.music.messaging.data.Request;
-import f18a14c09s.integration.alexa.music.messaging.data.Response;
-import f18a14c09s.integration.alexa.music.data.MusicRequestType;
+import f18a14c09s.integration.alexa.music.data.RequestType;
+import f18a14c09s.integration.alexa.music.messagetypes.Request;
+import f18a14c09s.integration.alexa.music.messagetypes.Response;
 import f18a14c09s.integration.json.JSONAdapter;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -18,21 +18,21 @@ import java.util.*;
 public abstract class AbstractMusicSkill<RequestImpl extends Request<?>, ResponseImpl extends Response<?>>
 //        implements         AlexaSkill<Request, ResponseImpl>
 {
-    private List<MusicRequestType> supportedMusicRequestTypes = new ArrayList<>();
+    private List<RequestType> supportedRequestTypes = new ArrayList<>();
     private Class<RequestImpl> requestClass;
     private final Logger logger = LogManager.getLogger(getClass());
     private final JSONAdapter jsonAdapter = new JSONAdapter();
 
     public AbstractMusicSkill(Class<RequestImpl> requestClass,
-                              MusicRequestType musicRequestType0,
-                              MusicRequestType... additionalMusicRequestTypes) {
+                              RequestType requestType0,
+                              RequestType... additionalRequestTypes) {
 //        super(JacksonJsonUnmarshaller.withTypeBinding(Request.class, "header"), new JacksonJsonMarshaller<>());
         this.setRequestClass(requestClass);
-        Objects.requireNonNull(musicRequestType0, "First argument required.");
-        getSupportedMusicRequestTypes().add(musicRequestType0);
-        Optional.ofNullable(additionalMusicRequestTypes)
+        Objects.requireNonNull(requestType0, "First argument required.");
+        this.getSupportedRequestTypes().add(requestType0);
+        Optional.ofNullable(additionalRequestTypes)
                 .map(Arrays::asList)
-                .ifPresent(getSupportedMusicRequestTypes()::addAll);
+                .ifPresent(this.getSupportedRequestTypes()::addAll);
     }
 
     private void debug(Request request) {
