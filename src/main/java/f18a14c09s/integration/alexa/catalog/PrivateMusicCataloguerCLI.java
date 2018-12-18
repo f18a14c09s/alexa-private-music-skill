@@ -47,6 +47,8 @@ public class PrivateMusicCataloguerCLI {
 
     private void catalogRecursively() throws IOException {
         dao.save(en_US);
+        dao.commit();
+        en_US = dao.findLocale(en_US.getCountry(), en_US.getLanguage());
         List<TrackMetadata> trackMetadata = catalogRecursively(srcDir);
         trackMetadata.forEach(track -> {
             track.setAlbum(Optional.ofNullable(track.getAlbum()).filter(s -> !s.trim().isEmpty()).orElse("Unknown"));

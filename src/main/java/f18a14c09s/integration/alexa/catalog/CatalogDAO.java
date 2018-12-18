@@ -48,11 +48,17 @@ public class CatalogDAO {
     }
 
     public void close(boolean commit) {
-        if (commit && entityManager.getTransaction().isActive()) {
-            entityManager.getTransaction().commit();
+        if (commit) {
+            commit();
         }
         entityManager.close();
         entityManagerFactory.close();
+    }
+
+    public void commit() {
+        if (entityManager.getTransaction().isActive()) {
+            entityManager.getTransaction().commit();
+        }
     }
 
     public List<ArtistReference> findAllArtistReferences() {
@@ -80,4 +86,8 @@ public class CatalogDAO {
         return entityManager.createQuery(criteria.select(cb.count(root))).getSingleResult();
     }
 
+    public Locale findLocale(String country, String language) {
+        return entityManager.createQuery("SELECT o FROM Locale o WHERE o.country = :country AND o.language = :language",
+                Locale.class).setParameter("country", country).setParameter("language", language).getSingleResult();
+    }
 }
