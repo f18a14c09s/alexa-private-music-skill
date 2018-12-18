@@ -1,0 +1,40 @@
+<persistence xmlns="http://java.sun.com/xml/ns/persistence"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xsi:schemaLocation="http://java.sun.com/xml/ns/persistence http://java.sun.com/xml/ns/persistence/persistence_2_0.xsd"
+             version="2.0">
+    <persistence-unit name="alexa-music-data" transaction-type="RESOURCE_LOCAL">
+        <provider>org.hibernate.jpa.HibernatePersistenceProvider</provider>
+        <!--<jta-data-source>java:/DefaultDS</jta-data-source>-->
+        <!--<mapping-file>ormap.xml</mapping-file>-->
+        <!--<jar-file>MyApp.jar</jar-file>-->
+        <class>f18a14c09s.integration.alexa.music.catalog.data.AbstractCatalog</class>
+        <class>f18a14c09s.integration.alexa.music.catalog.data.MusicAlbumCatalog</class>
+        <class>f18a14c09s.integration.alexa.music.catalog.data.MusicRecordingCatalog</class>
+        <class>f18a14c09s.integration.alexa.music.catalog.data.MusicGroupCatalog</class>
+        <class>f18a14c09s.integration.alexa.music.entities.BaseEntity</class>
+        <class>f18a14c09s.integration.alexa.music.entities.ArtistReference</class>
+        <class>f18a14c09s.integration.alexa.music.entities.Artist</class>
+        <class>f18a14c09s.integration.alexa.music.entities.AlbumReference</class>
+        <class>f18a14c09s.integration.alexa.music.entities.Album</class>
+        <class>f18a14c09s.integration.alexa.music.entities.Track</class>
+        <class>f18a14c09s.integration.alexa.music.entities.Popularity</class>
+        <class>f18a14c09s.integration.alexa.music.entities.EntityName</class>
+        <class>f18a14c09s.integration.alexa.music.entities.AlternateNames</class>
+        <class>f18a14c09s.integration.alexa.music.entities.PopularityOverride</class>
+        <class>f18a14c09s.integration.alexa.data.Locale</class>
+        <!--<shared-cache-mode>ENABLE_SELECTOVE</shared-cache-mode>-->
+        <!--<validation-mode>CALLBACK</validation-mode>-->
+        <properties>
+            <!--<property name="hibernate.dialect" value="org.hibernate.dialect.H2Dialect"/>-->
+            <property name="hibernate.hbm2ddl.auto" value="create-drop"/>
+            <property name="hibernate.archive.autodetection" value="class"/>
+            <property name="hibernate.dialect" value="org.hibernate.dialect.H2Dialect"/>
+            <property name="hibernate.connection.driver_class" value="org.h2.Driver"/>
+            <property name="hibernate.connection.url" value="jdbc:h2:./target/h2-1"/>
+            <property name="hibernate.connection.user" value="sa"/>
+            <!-- <property name="hibernate.show_sql" value="true"/>
+            <property name="hibernate.flushMode" value="FLUSH_AUTO" />-->
+            <!--<property name="hibernate.hbm2ddl.auto" value="update" />-->
+        </properties>
+    </persistence-unit>
+</persistence>

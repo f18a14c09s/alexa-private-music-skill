@@ -1,8 +1,8 @@
 package f18a14c09s.integration.alexa;
 
+import f18a14c09s.integration.alexa.music.data.RequestType;
 import f18a14c09s.integration.alexa.music.messagetypes.GetPlayableContentRequest;
 import f18a14c09s.integration.alexa.music.messagetypes.GetPlayableContentResponse;
-import f18a14c09s.integration.alexa.music.data.RequestType;
 
 import java.io.IOException;
 
