@@ -49,6 +49,7 @@ public class PrivateMusicCataloguerCLI {
         dao.save(en_US);
         dao.commit();
         en_US = dao.findLocale(en_US.getCountry(), en_US.getLanguage());
+        System.out.printf("Locale %s-%s has ID %s%n.", en_US.getLanguage(), en_US.getCountry(), en_US.getId());
         List<TrackMetadata> trackMetadata = catalogRecursively(srcDir);
         trackMetadata.forEach(track -> {
             track.setAlbum(Optional.ofNullable(track.getAlbum()).filter(s -> !s.trim().isEmpty()).orElse("Unknown"));
@@ -82,6 +83,7 @@ public class PrivateMusicCataloguerCLI {
             Track track = mp3ToAlexaCatalog.mp3ToTrackEntity(mp3);
             track.setArtists(asArrayList(artists.get(mp3.getAuthor())));
             track.setAlbums(asArrayList(albums.get(asArrayList(mp3.getAuthor(), mp3.getAlbum()))));
+            track.setLocales(asArrayList(en_US));
             return track;
         }).collect(Collectors.toList());
         MusicRecordingCatalog trackCatalog = new MusicRecordingCatalog();
@@ -114,7 +116,7 @@ public class PrivateMusicCataloguerCLI {
                 .map(track -> asArrayList(track.getAuthor(), track.getAlbum()))
                 .distinct()
                 .collect(Collectors.toMap(UnaryOperator.identity(), artistAlbum -> {
-                    Album album = newAlbumEntity(artistAlbum.get(0), artistAlbum.get(1));
+                    Album album = newAlbumEntity(artistAlbum.get(1));
                     album.setArtists(asArrayList(artists.get(artistAlbum.get(0))));
                     return album;
                 }));
@@ -202,7 +204,7 @@ public class PrivateMusicCataloguerCLI {
         // TODO: Perform work:
     }
 
-    private Album newAlbumEntity(String artistName, String albumName) {
+    private Album newAlbumEntity(String albumName) {
         Album retval = new Album();
         retval.setLanguageOfContent(asArrayList("en"));
         retval.setNames(asArrayList(new EntityName("en", albumName)));
@@ -210,8 +212,6 @@ public class PrivateMusicCataloguerCLI {
         retval.setReleaseType("Studio Album");
         retval.setDeleted(false);
         retval.setLastUpdatedTime(Calendar.getInstance());
-//        retval.setId(UUID.nameUUIDFromBytes(String.format("Album %s by %s", albumName, artistName)
-//                .getBytes(StandardCharsets.UTF_8)).toString());
         retval.setId(UUID.randomUUID().toString());
         retval.setLocales(asArrayList(en_US));
         return retval;
@@ -223,7 +223,6 @@ public class PrivateMusicCataloguerCLI {
         retval.setPopularity(Popularity.unratedWithNoOverrides());
         retval.setDeleted(false);
         retval.setLastUpdatedTime(Calendar.getInstance());
-//        retval.setId(UUID.nameUUIDFromBytes(artistName.getBytes(StandardCharsets.UTF_8)).toString());
         retval.setId(UUID.randomUUID().toString());
         retval.setLocales(asArrayList(en_US));
         return retval;

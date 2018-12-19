@@ -62,14 +62,10 @@ public class CatalogDAO {
     }
 
     public List<ArtistReference> findAllArtistReferences() {
-//        return entityManager.createQuery(String.format("SELECT o FROM %s o", ArtistReference.class.getSimpleName()))
-//                .getResultList();
         return findAll(ArtistReference.class);
     }
 
     public List<AlbumReference> findAllAlbumReferences() {
-//         return entityManager.createQuery(String.format("SELECT o FROM %s o", AlbumReference.class.getSimpleName()))
-//                .getResultList();
         return findAll(AlbumReference.class);
     }
 
