@@ -3,6 +3,8 @@ package f18a14c09s.integration.mp3;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.nio.file.Path;
+
 @Getter
 @Setter
 public class TrackMetadata {
@@ -13,6 +15,7 @@ public class TrackMetadata {
     private String dateString;
     private String copyright;
     private String comment;
+    private Path filePath;
 
     public TrackMetadata() {
     }

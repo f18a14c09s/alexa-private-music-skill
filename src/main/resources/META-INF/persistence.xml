@@ -19,9 +19,11 @@
         <class>f18a14c09s.integration.alexa.music.entities.AlternateNames</class>
         <class>f18a14c09s.integration.alexa.music.entities.PopularityOverride</class>
         <class>f18a14c09s.integration.alexa.data.Locale</class>
+        <class>f18a14c09s.integration.alexa.music.data.Art</class>
+        <class>f18a14c09s.integration.alexa.music.data.ArtSource</class>
         <properties>
             <!--<property name="hibernate.show_sql" value="true"/>-->
-            <property name="hibernate.hbm2ddl.auto" value="update"/>
+            <property name="hibernate.hbm2ddl.auto" value="create-drop"/>
         </properties>
     </persistence-unit>
 </persistence>
