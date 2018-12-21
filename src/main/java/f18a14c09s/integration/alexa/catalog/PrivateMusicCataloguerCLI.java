@@ -31,7 +31,6 @@ import java.util.stream.*;
 public class PrivateMusicCataloguerCLI {
     public static final String MP3EXT = ".mp3";
     public static final String JPGEXT = ".jpg";
-    private Map<String, Map<String, List<Track>>> retval = new HashMap<>();
     private boolean reset = true;
     private boolean writeToDisk = false;
     private File srcDir;
@@ -48,7 +47,7 @@ public class PrivateMusicCataloguerCLI {
         File dest = new File(args[1]);
         String baseUrl = args[2];
         PrivateMusicCataloguerCLI cli = new PrivateMusicCataloguerCLI(src, dest, baseUrl);
-        cli.catalogRecursively();
+        cli.catalogMusic();
     }
 
     private PrivateMusicCataloguerCLI(File srcDir, File destDir, String baseUrl) throws IOException {
@@ -57,12 +56,12 @@ public class PrivateMusicCataloguerCLI {
         this.baseUrl = baseUrl;
     }
 
-    private void catalogRecursively() throws IOException {
+    private void catalogMusic() throws IOException {
         dao.save(en_US);
         dao.commit();
         en_US = dao.findLocale(en_US.getCountry(), en_US.getLanguage());
-        System.out.printf("Locale %s-%s has ID %s%n.", en_US.getLanguage(), en_US.getCountry(), en_US.getId());
-        List<SongDTO> trackMetadataAndAlbumArt = catalogRecursively(srcDir);
+        System.out.printf("Locale %s-%s has ID %s.%n", en_US.getLanguage(), en_US.getCountry(), en_US.getId());
+        List<SongDTO> trackMetadataAndAlbumArt = collectTrackInfoRecursively(srcDir);
         trackMetadataAndAlbumArt.stream().map(SongDTO::getTrack).forEach(track -> {
             track.setAlbum(Optional.ofNullable(track.getAlbum()).filter(s -> !s.trim().isEmpty()).orElse("Unknown"));
             track.setAuthor(Optional.ofNullable(track.getAuthor()).filter(s -> !s.trim().isEmpty()).orElse("Unknown"));
@@ -91,6 +90,34 @@ public class PrivateMusicCataloguerCLI {
                             }
                             return lhs;
                         }));
+        catalogTracks(trackMetadataAndAlbumArt, artists, albums);
+        printSummary();
+        dao.close(true);
+    }
+
+    private void printSummary() {
+        for (Class<?> clazz : asArrayList(Locale.class,
+                MusicGroupCatalog.class,
+                MusicAlbumCatalog.class,
+                MusicRecordingCatalog.class,
+                Artist.class,
+                ArtistReference.class,
+                Album.class,
+                AlbumReference.class,
+                Track.class,
+                EntityName.class,
+                AlternateNames.class,
+                Popularity.class,
+                PopularityOverride.class,
+                Art.class,
+                ArtSource.class)) {
+            System.out.printf("Total %s: %s%n", clazz.getSimpleName(), dao.count(clazz));
+        }
+    }
+
+    private void catalogTracks(List<SongDTO> trackMetadataAndAlbumArt,
+                               Map<String, ArtistReference> artists,
+                               Map<ArrayList<String>, AlbumReference> albums) throws IOException {
         List<Track> tracks = trackMetadataAndAlbumArt.stream().map(trackAndArt -> {
             TrackMetadata metadata = trackAndArt.getTrack();
             Track track = mp3ToAlexaCatalog.mp3ToTrackEntity(metadata);
@@ -107,22 +134,6 @@ public class PrivateMusicCataloguerCLI {
         writeToDisk(trackCatalog,
                 new File(destDir, srcDir.getAbsolutePath().replaceAll("[^A-Za-z0-9-_\\.]+", ".") + "-tracks.json"));
         dao.save(trackCatalog);
-        for (Class<?> clazz : asArrayList(Locale.class,
-                MusicGroupCatalog.class,
-                MusicAlbumCatalog.class,
-                MusicRecordingCatalog.class,
-                Artist.class,
-                ArtistReference.class,
-                Album.class,
-                AlbumReference.class,
-                Track.class,
-                EntityName.class,
-                AlternateNames.class,
-                Popularity.class,
-                PopularityOverride.class)) {
-            System.out.printf("Total %s: %s%n", clazz.getSimpleName(), dao.count(clazz));
-        }
-        dao.close(true);
     }
 
     private Map<ArrayList<String>, Album> catalogAlbums(List<SongDTO> tracks,
@@ -169,20 +180,20 @@ public class PrivateMusicCataloguerCLI {
                 .collect(ArrayList::new, List::add, List::addAll);
     }
 
-    private List<SongDTO> catalogRecursively(File dir) throws IOException {
+    private List<SongDTO> collectTrackInfoRecursively(File dir) throws IOException {
         List<SongDTO> retval = new ArrayList<>();
-        Art albumArt = saveArt(dir);
-        retval.addAll(catalogMp3s(dir).stream()
+        Art albumArt = collectAlbumArt(dir);
+        retval.addAll(collectTrackMetadata(dir).stream()
                 .map(track -> new SongDTO(track, albumArt))
                 .collect(Collectors.toList()));
         File[] subdirs = dir.listFiles(File::isDirectory);
         for (File subdir : subdirs) {
-            retval.addAll(catalogRecursively(subdir));
+            retval.addAll(collectTrackInfoRecursively(subdir));
         }
         return retval;
     }
 
-    private List<TrackMetadata> catalogMp3s(File dir) throws IOException {
+    private List<TrackMetadata> collectTrackMetadata(File dir) throws IOException {
         List<TrackMetadata> retval = new ArrayList<>();
         File destFile = new File(destDir,
                 srcDir.toPath().relativize(dir.toPath()).toString().replaceAll("[^A-Za-z0-9-_\\.]+", ".") + ".json");
@@ -218,7 +229,7 @@ public class PrivateMusicCataloguerCLI {
         }
     }
 
-    private Art saveArt(File dir) {
+    private Art collectAlbumArt(File dir) {
         Optional<File[]> optionalJpgs = Optional.ofNullable(dir.listFiles(file -> Optional.ofNullable(file)
                 .filter(File::isFile)
                 .map(File::getName)
