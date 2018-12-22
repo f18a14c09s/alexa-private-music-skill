@@ -1,4 +1,4 @@
-package f18a14c09s.integration.alexa.catalog;
+package f18a14c09s.integration.alexa.music.catalog;
 
 import f18a14c09s.integration.alexa.music.entities.EntityName;
 import f18a14c09s.integration.alexa.music.entities.Popularity;

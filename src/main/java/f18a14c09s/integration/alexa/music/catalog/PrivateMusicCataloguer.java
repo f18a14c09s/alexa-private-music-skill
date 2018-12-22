@@ -1,4 +1,4 @@
-package f18a14c09s.integration.alexa.catalog;
+package f18a14c09s.integration.alexa.music.catalog;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import f18a14c09s.integration.alexa.data.Locale;
