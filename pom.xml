@@ -223,6 +223,11 @@
             <version>1.4.197</version>
             <!--<scope>test</scope>-->
         </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-web</artifactId>
+            <version>5.0.7.RELEASE</version>
+        </dependency>
     </dependencies>
 
     <profiles>
