@@ -12,7 +12,7 @@ class Mp3AdapterTest {
                 "/example-data/smooth-operator_sade_diamond-life.mp3")));
         assertNull(trackMetadata.getComment());
         assertNull(trackMetadata.getCopyright());
-        assertEquals((Long) 298L, trackMetadata.getDuration());
+        assertEquals((Long) 298L, trackMetadata.getDurationSeconds());
         assertEquals("Diamond Life", trackMetadata.getAlbum());
         assertEquals("Sade", trackMetadata.getAuthor());
         assertEquals("1984", trackMetadata.getDateString());

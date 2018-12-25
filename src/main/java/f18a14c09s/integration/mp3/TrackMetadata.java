@@ -8,7 +8,7 @@ import java.nio.file.Path;
 @Getter
 @Setter
 public class TrackMetadata {
-    private Long duration;
+    private Long durationSeconds;
     private String title;
     private String author;
     private String album;
@@ -21,27 +21,10 @@ public class TrackMetadata {
     public TrackMetadata() {
     }
 
-    @Deprecated
     public TrackMetadata(String title,
                          String author,
                          String album,
-                         Long duration,
-                         String dateString,
-                         String copyright,
-                         String comment) {
-        this.title = title;
-        this.author = author;
-        this.album = album;
-        this.duration = duration;
-        this.dateString = dateString;
-        this.copyright = copyright;
-        this.comment = comment;
-    }
-
-    public TrackMetadata(String title,
-                         String author,
-                         String album,
-                         Long duration,
+                         Long durationSeconds,
                          String dateString,
                          String copyright,
                          String comment,
@@ -49,7 +32,7 @@ public class TrackMetadata {
         this.title = title;
         this.author = author;
         this.album = album;
-        this.duration = duration;
+        this.durationSeconds = durationSeconds;
         this.dateString = dateString;
         this.copyright = copyright;
         this.comment = comment;
