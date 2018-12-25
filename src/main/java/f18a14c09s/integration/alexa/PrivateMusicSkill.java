@@ -8,8 +8,7 @@ import com.amazon.ask.util.impl.JacksonJsonMarshaller;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import f18a14c09s.integration.alexa.data.BaseMessage;
 import f18a14c09s.integration.alexa.music.data.RequestType;
-import f18a14c09s.integration.alexa.music.messagetypes.Request;
-import f18a14c09s.integration.alexa.music.messagetypes.Response;
+import f18a14c09s.integration.alexa.music.messagetypes.*;
 import f18a14c09s.integration.json.JSONAdapter;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -26,11 +25,16 @@ public class PrivateMusicSkill implements AlexaSkill<Request, Response> {
 
     static {
         Map<RequestType, AbstractMusicSkill<? extends Request<?>, ? extends Response<?>>> tempMap = new HashMap<>();
-        tempMap.put(new RequestType("Alexa.Media.Search", "GetPlayableContent"), new GetPlayableContentSkill());
-        tempMap.put(new RequestType("Alexa.Media.Playback", "Initiate"), new InitiationSkill());
-        tempMap.put(new RequestType("Alexa.Media.PlayQueue", "GetItem"), new GetItemSkill());
-        tempMap.put(new RequestType("Alexa.Media.PlayQueue", "GetPreviousItem"), new GetPreviousItemSkill());
-        tempMap.put(new RequestType("Alexa.Media.PlayQueue", "GetNextItem"), new GetNextItemSkill());
+        tempMap.put(new RequestType(AlexaMediaSearch.NAMESPACE_NAME, AlexaMediaSearch.GET_PLAYABLE_CONTENT.getMyName()),
+                new GetPlayableContentSkill());
+        tempMap.put(new RequestType(AlexaMediaPlayback.NAMESPACE_NAME, AlexaMediaPlayback.INITIATE.getMyName()),
+                new InitiationSkill());
+        tempMap.put(new RequestType(AlexaMediaPlayQueue.NAMESPACE_NAME, AlexaMediaPlayQueue.GET_ITEM.getMyName()),
+                new GetItemSkill());
+        tempMap.put(new RequestType(AlexaMediaPlayQueue.NAMESPACE_NAME,
+                AlexaMediaPlayQueue.GET_PREVIOUS_ITEM.getMyName()), new GetPreviousItemSkill());
+        tempMap.put(new RequestType(AlexaMediaPlayQueue.NAMESPACE_NAME, AlexaMediaPlayQueue.GET_NEXT_ITEM.getMyName()),
+                new GetNextItemSkill());
         skillsByRequestType = tempMap;
     }
 

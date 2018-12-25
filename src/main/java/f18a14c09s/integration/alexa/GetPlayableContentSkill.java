@@ -7,6 +7,7 @@ import f18a14c09s.integration.alexa.music.data.ContentActions;
 import f18a14c09s.integration.alexa.music.data.RequestType;
 import f18a14c09s.integration.alexa.music.data.ResolvedSelectionCriteria;
 import f18a14c09s.integration.alexa.music.entities.*;
+import f18a14c09s.integration.alexa.music.messagetypes.AlexaMediaSearch;
 import f18a14c09s.integration.alexa.music.messagetypes.GetPlayableContentRequest;
 import f18a14c09s.integration.alexa.music.messagetypes.GetPlayableContentResponse;
 import f18a14c09s.integration.alexa.music.messagetypes.Response;
@@ -19,7 +20,8 @@ public class GetPlayableContentSkill extends AbstractMusicSkill<GetPlayableConte
     private CatalogDAO dao;
 
     public GetPlayableContentSkill() {
-        super(GetPlayableContentRequest.class, new RequestType("Alexa.Media.Search", "GetPlayableContent"));
+        super(GetPlayableContentRequest.class,
+                new RequestType(AlexaMediaSearch.NAMESPACE_NAME, AlexaMediaSearch.GET_PLAYABLE_CONTENT.getMyName()));
         try {
             dao = new CatalogDAO();
         } catch (IOException e) {

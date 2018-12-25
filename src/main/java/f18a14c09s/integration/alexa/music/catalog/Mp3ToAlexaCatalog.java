@@ -21,6 +21,9 @@ public class Mp3ToAlexaCatalog {
         Track retval = new Track();
         retval.setLanguageOfContent(defaultContentLanguages());
         retval.setNames(asArrayList(new EntityName("en", mp3.getTitle())));
+        retval.setDurationSeconds(mp3.getDurationSeconds());
+        retval.setTrackNumber(mp3.getTrackNumber());
+        retval.setLastTrackNumber(mp3.getLastTrackNumber());
         retval.setPopularity(Popularity.unratedWithNoOverrides());
         retval.setReleaseType("Studio Recording");
         retval.setLastUpdatedTime(Calendar.getInstance());

@@ -21,7 +21,6 @@ import org.jaudiotagger.tag.TagException;
 import org.springframework.web.util.UriUtils;
 
 import javax.imageio.ImageIO;
-import javax.sound.sampled.UnsupportedAudioFileException;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileInputStream;
@@ -210,7 +209,7 @@ class PrivateMusicCataloguer {
                         TrackMetadata track = mp3Adapter.parseMetadata(fis);
                         track.setFilePath(relativePath);
                         return track;
-                    } catch (UnsupportedAudioFileException | IOException | InvalidAudioFrameException | TagException | ReadOnlyFileException e) {
+                    } catch (IOException | InvalidAudioFrameException | TagException | ReadOnlyFileException e) {
                         throw new RuntimeException(String.format("Failure parsing %s.", mp3.getAbsolutePath()), e);
                     }
                 }).forEach(retval::add);

@@ -12,11 +12,12 @@ public class TrackMetadata {
     private String title;
     private String author;
     private String album;
-    private String dateString;
+    private String year;
     private String copyright;
     private String comment;
     private Path filePath;
     private Long trackNumber;
+    private Long lastTrackNumber;
 
     public TrackMetadata() {
     }
@@ -25,17 +26,19 @@ public class TrackMetadata {
                          String author,
                          String album,
                          Long durationSeconds,
-                         String dateString,
+                         String year,
                          String copyright,
                          String comment,
-                         Long trackNumber) {
+                         Long trackNumber,
+                         Long lastTrackNumber) {
         this.title = title;
         this.author = author;
         this.album = album;
         this.durationSeconds = durationSeconds;
-        this.dateString = dateString;
+        this.year = year;
         this.copyright = copyright;
         this.comment = comment;
         this.trackNumber = trackNumber;
+        this.lastTrackNumber = lastTrackNumber;
     }
 }

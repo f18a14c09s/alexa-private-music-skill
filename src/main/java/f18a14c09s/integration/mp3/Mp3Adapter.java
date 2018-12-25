@@ -42,7 +42,8 @@ public class Mp3Adapter {
                 getField.apply(FieldKey.YEAR),
                 null,
                 getField.apply(FieldKey.COMMENT),
-                Optional.ofNullable(getField.apply(FieldKey.TRACK)).map(Long::parseLong).orElse(null));
+                Optional.ofNullable(getField.apply(FieldKey.TRACK)).map(Long::parseLong).orElse(null),
+                Optional.ofNullable(getField.apply(FieldKey.TRACK_TOTAL)).map(Long::parseLong).orElse(null));
     }
 
     private static boolean notEmpty(String s) {

@@ -15,7 +15,7 @@ class Mp3AdapterTest {
         assertEquals((Long) 298L, trackMetadata.getDurationSeconds());
         assertEquals("Diamond Life", trackMetadata.getAlbum());
         assertEquals("Sade", trackMetadata.getAuthor());
-        assertEquals("1984", trackMetadata.getDateString());
+        assertEquals("1984", trackMetadata.getYear());
         assertEquals("Smooth Operator", trackMetadata.getTitle());
     }
 }

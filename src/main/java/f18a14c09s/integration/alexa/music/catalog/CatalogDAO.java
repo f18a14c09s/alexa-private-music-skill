@@ -5,6 +5,7 @@ import f18a14c09s.integration.alexa.music.catalog.data.AbstractCatalog;
 import f18a14c09s.integration.alexa.music.entities.AlbumReference;
 import f18a14c09s.integration.alexa.music.entities.ArtistReference;
 import f18a14c09s.integration.alexa.music.entities.BaseEntity;
+import f18a14c09s.integration.alexa.music.entities.Track;
 import f18a14c09s.integration.aws.AwsSecretsAdapter;
 
 import javax.persistence.EntityManager;
@@ -90,5 +91,19 @@ public class CatalogDAO {
 
     public <E extends BaseEntity> E findEntity(Class<E> clazz, String id) {
         return entityManager.find(clazz, id);
+    }
+
+    public Track findArtistFirstTrack(String id) {
+        List<Track> tracks = entityManager.createQuery(
+                "SELECT track FROM Track track JOIN track.artists artist JOIN track.albums album JOIN album.names albumName WHERE artist.id = :artistid ORDER BY albumName.value, track.trackNumber",
+                Track.class).setParameter("artistid", id).setMaxResults(1).getResultList();
+        return tracks.isEmpty() ? null : tracks.get(0);
+    }
+
+    public Track findAlbumFirstTrack(String id) {
+        List<Track> tracks = entityManager.createQuery(
+                "SELECT track FROM Track track JOIN track.albums album WHERE album.id = :albumid ORDER BY track.trackNumber",
+                Track.class).setParameter("albumid", id).setMaxResults(1).getResultList();
+        return tracks.isEmpty() ? null : tracks.get(0);
     }
 }
