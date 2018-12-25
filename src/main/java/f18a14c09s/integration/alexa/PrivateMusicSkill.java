@@ -32,8 +32,8 @@ public class PrivateMusicSkill implements AlexaSkill<Request, Response> {
         tempMap.put(new RequestType(AlexaMediaPlayQueue.NAMESPACE_NAME, AlexaMediaPlayQueue.GET_ITEM.getMyName()),
                 new GetItemSkill());
         tempMap.put(new RequestType(AlexaMediaPlayQueue.NAMESPACE_NAME,
-                AlexaMediaPlayQueue.GET_PREVIOUS_ITEM.getMyName()), new GetPreviousItemSkill());
-        tempMap.put(new RequestType(AlexaMediaPlayQueue.NAMESPACE_NAME, AlexaMediaPlayQueue.GET_NEXT_ITEM.getMyName()),
+                AlexaAudioPlayQueue.GET_PREVIOUS_ITEM.getMyName()), new GetPreviousItemSkill());
+        tempMap.put(new RequestType(AlexaMediaPlayQueue.NAMESPACE_NAME, AlexaAudioPlayQueue.GET_NEXT_ITEM.getMyName()),
                 new GetNextItemSkill());
         skillsByRequestType = tempMap;
     }
