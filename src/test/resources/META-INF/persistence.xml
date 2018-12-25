@@ -22,7 +22,7 @@
         <class>f18a14c09s.integration.alexa.music.data.Art</class>
         <class>f18a14c09s.integration.alexa.music.data.ArtSource</class>
         <properties>
-            <property name="hibernate.hbm2ddl.auto" value="create-drop"/>
+            <property name="hibernate.hbm2ddl.auto" value="create"/>
             <property name="hibernate.archive.autodetection" value="class"/>
             <property name="hibernate.dialect" value="org.hibernate.dialect.H2Dialect"/>
             <property name="hibernate.connection.driver_class" value="org.h2.Driver"/>

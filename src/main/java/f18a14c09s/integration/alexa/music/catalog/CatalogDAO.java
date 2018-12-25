@@ -4,6 +4,7 @@ import f18a14c09s.integration.alexa.data.Locale;
 import f18a14c09s.integration.alexa.music.catalog.data.AbstractCatalog;
 import f18a14c09s.integration.alexa.music.entities.AlbumReference;
 import f18a14c09s.integration.alexa.music.entities.ArtistReference;
+import f18a14c09s.integration.alexa.music.entities.BaseEntity;
 import f18a14c09s.integration.aws.AwsSecretsAdapter;
 
 import javax.persistence.EntityManager;
@@ -85,5 +86,9 @@ public class CatalogDAO {
     public Locale findLocale(String country, String language) {
         return entityManager.createQuery("SELECT o FROM Locale o WHERE o.country = :country AND o.language = :language",
                 Locale.class).setParameter("country", country).setParameter("language", language).getSingleResult();
+    }
+
+    public <E extends BaseEntity> E findEntity(Class<E> clazz, String id) {
+        return entityManager.find(clazz, id);
     }
 }

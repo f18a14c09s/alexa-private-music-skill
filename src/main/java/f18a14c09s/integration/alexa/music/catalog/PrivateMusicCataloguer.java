@@ -1,6 +1,5 @@
 package f18a14c09s.integration.alexa.music.catalog;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import f18a14c09s.integration.alexa.data.Locale;
 import f18a14c09s.integration.alexa.music.catalog.data.AbstractCatalog;
 import f18a14c09s.integration.alexa.music.catalog.data.MusicAlbumCatalog;
@@ -10,11 +9,15 @@ import f18a14c09s.integration.alexa.music.data.Art;
 import f18a14c09s.integration.alexa.music.data.ArtSource;
 import f18a14c09s.integration.alexa.music.data.ArtSourceSize;
 import f18a14c09s.integration.alexa.music.entities.*;
+import f18a14c09s.integration.json.JSONAdapter;
 import f18a14c09s.integration.mp3.Mp3Adapter;
 import f18a14c09s.integration.mp3.TrackMetadata;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
+import org.jaudiotagger.audio.exceptions.InvalidAudioFrameException;
+import org.jaudiotagger.audio.exceptions.ReadOnlyFileException;
+import org.jaudiotagger.tag.TagException;
 import org.springframework.web.util.UriUtils;
 
 import javax.imageio.ImageIO;
@@ -41,7 +44,7 @@ class PrivateMusicCataloguer {
     private CatalogDAO dao = new CatalogDAO();
     private Mp3Adapter mp3Adapter = new Mp3Adapter();
     private Mp3ToAlexaCatalog mp3ToAlexaCatalog = new Mp3ToAlexaCatalog();
-    private ObjectMapper jsonMapper = new ObjectMapper();
+    private JSONAdapter jsonAdapter = new JSONAdapter();
     private Locale en_US = Locale.en_US();
 
     PrivateMusicCataloguer(File srcDir, File destDir, String baseUrl, boolean reset) throws IOException {
@@ -207,7 +210,7 @@ class PrivateMusicCataloguer {
                         TrackMetadata track = mp3Adapter.parseMetadata(fis);
                         track.setFilePath(relativePath);
                         return track;
-                    } catch (UnsupportedAudioFileException | IOException e) {
+                    } catch (UnsupportedAudioFileException | IOException | InvalidAudioFrameException | TagException | ReadOnlyFileException e) {
                         throw new RuntimeException(String.format("Failure parsing %s.", mp3.getAbsolutePath()), e);
                     }
                 }).forEach(retval::add);
@@ -220,7 +223,7 @@ class PrivateMusicCataloguer {
         if (writeToDisk) {
             System.out.printf("Writing to %s.%n", destFile.getAbsolutePath());
             try (FileWriter fw = new FileWriter(destFile)) {
-                jsonMapper.writeValue(fw, catalog);
+                jsonAdapter.writeValue(fw, catalog);
             }
         }
     }
@@ -269,7 +272,6 @@ class PrivateMusicCataloguer {
         retval.setNames(asArrayList(new EntityName("en", albumName)));
         retval.setPopularity(Popularity.unratedWithNoOverrides());
         retval.setReleaseType("Studio Album");
-        retval.setDeleted(false);
         retval.setLastUpdatedTime(Calendar.getInstance());
         retval.setId(UUID.randomUUID().toString());
         retval.setLocales(asArrayList(en_US));
@@ -280,7 +282,6 @@ class PrivateMusicCataloguer {
         Artist retval = new Artist();
         retval.setNames(asArrayList(new EntityName("en", artistName)));
         retval.setPopularity(Popularity.unratedWithNoOverrides());
-        retval.setDeleted(false);
         retval.setLastUpdatedTime(Calendar.getInstance());
         retval.setId(UUID.randomUUID().toString());
         retval.setLocales(asArrayList(en_US));

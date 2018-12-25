@@ -23,7 +23,6 @@ public class Mp3ToAlexaCatalog {
         retval.setNames(asArrayList(new EntityName("en", mp3.getTitle())));
         retval.setPopularity(Popularity.unratedWithNoOverrides());
         retval.setReleaseType("Studio Recording");
-        retval.setDeleted(false);
         retval.setLastUpdatedTime(Calendar.getInstance());
         retval.setId(UUID.randomUUID().toString());
         return retval;

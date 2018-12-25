@@ -16,10 +16,12 @@ public class TrackMetadata {
     private String copyright;
     private String comment;
     private Path filePath;
+    private Long trackNumber;
 
     public TrackMetadata() {
     }
 
+    @Deprecated
     public TrackMetadata(String title,
                          String author,
                          String album,
@@ -34,5 +36,23 @@ public class TrackMetadata {
         this.dateString = dateString;
         this.copyright = copyright;
         this.comment = comment;
+    }
+
+    public TrackMetadata(String title,
+                         String author,
+                         String album,
+                         Long duration,
+                         String dateString,
+                         String copyright,
+                         String comment,
+                         Long trackNumber) {
+        this.title = title;
+        this.author = author;
+        this.album = album;
+        this.duration = duration;
+        this.dateString = dateString;
+        this.copyright = copyright;
+        this.comment = comment;
+        this.trackNumber = trackNumber;
     }
 }
