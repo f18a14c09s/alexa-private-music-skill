@@ -7,6 +7,7 @@ import f18a14c09s.integration.alexa.music.entities.ArtistReference;
 import f18a14c09s.integration.alexa.music.entities.BaseEntity;
 import f18a14c09s.integration.alexa.music.entities.Track;
 import f18a14c09s.integration.aws.AwsSecretsAdapter;
+import f18a14c09s.integration.hibernate.Hbm2DdlAuto;
 
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
@@ -23,14 +24,34 @@ public class CatalogDAO {
     private AwsSecretsAdapter awsSecrets;
 
     public CatalogDAO() throws IOException {
+        this(null);
+    }
+
+    public CatalogDAO(Hbm2DdlAuto hbm2DdlAuto) throws IOException {
         awsSecrets = new AwsSecretsAdapter();
         Map<String, Object> properties = new HashMap<>();
-        Map<String, Object> secret = awsSecrets.getSecret("alexa-private-music-skill");
-        properties.put("javax.persistence.jdbc.driver", secret.get("databaseDriver"));
-        properties.put("javax.persistence.jdbc.url", secret.get("databaseUrl"));
-        properties.put("javax.persistence.jdbc.user", secret.get("databaseUserId"));
-        properties.put("javax.persistence.jdbc.password", secret.get("databasePassword"));
-        properties.put("hibernate.dialect", secret.get("hibernateDatabaseDialect"));
+        Map<String, String> xref = new HashMap<>();
+        Map<String, Object> secret = null;
+        Optional.ofNullable(hbm2DdlAuto)
+                .map(Hbm2DdlAuto::value)
+                .ifPresent(value -> properties.put("hibernate.hbm2ddl.auto", hbm2DdlAuto.value()));
+        xref.put("javax.persistence.jdbc.driver", "databaseDriver");
+        xref.put("javax.persistence.jdbc.url", "databaseUrl");
+        xref.put("javax.persistence.jdbc.user", "databaseUserId");
+        xref.put("javax.persistence.jdbc.password", "databasePassword");
+        xref.put("hibernate.dialect", "hibernateDatabaseDialect");
+        for (Map.Entry<String, String> kvp : xref.entrySet()) {
+            Optional<String> value = Optional.ofNullable(System.getenv(kvp.getValue()));
+            if (!value.isPresent()) {
+                if (secret == null) {
+                    secret = awsSecrets.getSecret("alexa-private-music-skill");
+                }
+                value = Optional.ofNullable((String) secret.get(kvp.getValue()));
+            }
+            if (value.isPresent()) {
+                properties.put(kvp.getKey(), value.get());
+            }
+        }
         entityManagerFactory = Persistence.createEntityManagerFactory("alexa-music-data", properties);
         entityManager = entityManagerFactory.createEntityManager();
     }

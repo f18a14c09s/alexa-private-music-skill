@@ -198,9 +198,15 @@
             <version>8.0.13</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk -->
+        <!--<dependency>-->
+            <!--<groupId>com.amazonaws</groupId>-->
+            <!--<artifactId>aws-java-sdk</artifactId>-->
+            <!--<version>1.11.470</version>-->
+        <!--</dependency>-->
+        <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-secretsmanager -->
         <dependency>
             <groupId>com.amazonaws</groupId>
-            <artifactId>aws-java-sdk</artifactId>
+            <artifactId>aws-java-sdk-secretsmanager</artifactId>
             <version>1.11.470</version>
         </dependency>
         <dependency>

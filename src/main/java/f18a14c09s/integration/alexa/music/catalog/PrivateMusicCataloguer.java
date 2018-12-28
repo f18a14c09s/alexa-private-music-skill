@@ -9,6 +9,7 @@ import f18a14c09s.integration.alexa.music.data.Art;
 import f18a14c09s.integration.alexa.music.data.ArtSource;
 import f18a14c09s.integration.alexa.music.data.ArtSourceSize;
 import f18a14c09s.integration.alexa.music.entities.*;
+import f18a14c09s.integration.hibernate.Hbm2DdlAuto;
 import f18a14c09s.integration.json.JSONAdapter;
 import f18a14c09s.integration.mp3.Mp3Adapter;
 import f18a14c09s.integration.mp3.TrackMetadata;
@@ -40,7 +41,7 @@ class PrivateMusicCataloguer {
     private File srcDir;
     private File destDir;
     private String baseUrl;
-    private CatalogDAO dao = new CatalogDAO();
+    private CatalogDAO dao = new CatalogDAO(Hbm2DdlAuto.create);
     private Mp3Adapter mp3Adapter = new Mp3Adapter();
     private Mp3ToAlexaCatalog mp3ToAlexaCatalog = new Mp3ToAlexaCatalog();
     private JSONAdapter jsonAdapter = new JSONAdapter();
@@ -136,6 +137,14 @@ class PrivateMusicCataloguer {
 
     private Map<ArrayList<String>, Album> catalogAlbums(List<SongDTO> tracks,
                                                         Map<String, ArtistReference> artists) throws IOException {
+        Map<List<String>, List<Art>> artByArtistNameAlbumName = tracks.stream()
+                .collect(Collectors.groupingBy(track -> asArrayList(track.getTrack().getAuthor(),
+                        track.getTrack().getAlbum()),
+                        Collectors.collectingAndThen(Collectors.toList(),
+                                list -> list.stream()
+                                        .map(SongDTO::getAlbumArt)
+                                        .distinct()
+                                        .collect(Collectors.toList()))));
         Map<ArrayList<String>, Album> albums = tracks.stream()
                 .map(SongDTO::getTrack)
                 .map(track -> asArrayList(track.getAuthor(), track.getAlbum()))
@@ -143,9 +152,9 @@ class PrivateMusicCataloguer {
                 .collect(Collectors.toMap(UnaryOperator.identity(), artistAlbum -> {
                     Album album = newAlbumEntity(artistAlbum.get(1));
                     album.setArtists(asArrayList(artists.get(artistAlbum.get(0))));
+                    album.setArt(artByArtistNameAlbumName.get(artistAlbum).get(0));
                     return album;
                 }));
-        albums.values().forEach(album -> album.setArt(tracks.get(0).getAlbumArt()));
         MusicAlbumCatalog catalog = new MusicAlbumCatalog();
         catalog.setEntities(new ArrayList<>(albums.values()));
         catalog.setLocales(asArrayList(en_US));
@@ -156,13 +165,25 @@ class PrivateMusicCataloguer {
     }
 
     private Map<String, Artist> catalogArtists(List<SongDTO> tracks) throws IOException {
+        Map<String, List<Art>> artistNameToArt = tracks.stream()
+                .collect(Collectors.groupingBy(track -> track.getTrack().getAuthor(),
+                        Collectors.collectingAndThen(Collectors.toList(),
+                                list -> list.stream()
+                                        .map(SongDTO::getAlbumArt)
+                                        .distinct()
+                                        .collect(Collectors.toList()))));
         Map<String, Artist> artists = tracks.stream()
                 .map(SongDTO::getTrack)
                 .map(TrackMetadata::getAuthor)
                 .distinct()
-                .collect(Collectors.toMap(UnaryOperator.identity(), this::newArtistEntity));
+                .collect(Collectors.toMap(UnaryOperator.identity(), artistName -> {
+                    Artist artist = newArtistEntity(artistName);
+                    artist.setArt(artistNameToArt.get(artistName).get(0));
+                    return artist;
+                }));
         MusicGroupCatalog catalog = new MusicGroupCatalog();
-        artists.values().forEach(artist -> artist.setArt(tracks.get(0).getAlbumArt()));
+        artists.values()
+                .forEach(artist -> artist.setArt(artistNameToArt.get(artist.getNames().get(0).getValue()).get(0)));
         catalog.setEntities(new ArrayList<>(artists.values()));
         catalog.setLocales(asArrayList(en_US));
         writeToDisk(catalog,

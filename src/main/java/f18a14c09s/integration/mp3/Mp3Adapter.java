@@ -47,6 +47,6 @@ public class Mp3Adapter {
     }
 
     private static boolean notEmpty(String s) {
-        return s != null && !s.trim().isEmpty();
+        return s != null && !s.trim().isEmpty() && !s.equals("null");
     }
 }
