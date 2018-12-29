@@ -28,7 +28,15 @@ public class Mp3Adapter {
             fos.flush();
         }
         tempFile.deleteOnExit();
-        MP3File mp3File = new MP3File(tempFile);
+        return parseMetadata(tempFile);
+    }
+
+    public TrackMetadata parseMetadata(File file) throws
+            IOException,
+            InvalidAudioFrameException,
+            TagException,
+            ReadOnlyFileException {
+        MP3File mp3File = new MP3File(file, MP3File.LOAD_ALL, true);
         Optional<MP3AudioHeader> mp3AudioHeader = Optional.ofNullable(mp3File.getMP3AudioHeader());
         Optional<ID3v1Tag> id3v1Tag = Optional.ofNullable(mp3File.getID3v1Tag());
         Optional<AbstractID3v2Tag> id3v2Tag = Optional.ofNullable(mp3File.getID3v2Tag());

@@ -24,7 +24,6 @@ import org.springframework.web.util.UriUtils;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -226,8 +225,8 @@ class PrivateMusicCataloguer {
             if (mp3s != null && mp3s.length >= 1) {
                 Arrays.stream(mp3s).map(mp3 -> {
                     Path relativePath = srcDir.toPath().relativize(mp3.toPath());
-                    try (FileInputStream fis = new FileInputStream(mp3)) {
-                        TrackMetadata track = mp3Adapter.parseMetadata(fis);
+                    try {
+                        TrackMetadata track = mp3Adapter.parseMetadata(mp3);
                         track.setFilePath(relativePath);
                         return track;
                     } catch (IOException | InvalidAudioFrameException | TagException | ReadOnlyFileException e) {
