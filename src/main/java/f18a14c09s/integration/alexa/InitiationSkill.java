@@ -30,7 +30,6 @@ public class InitiationSkill extends AbstractMusicSkill<InitiateRequest, Initiat
                 ToggleQueueControl.loop(false, false)));
         audioPlayerQueue.setFirstItem(firstTrack);
         audioPlayerQueue.setId(UUID.randomUUID().toString());
-//        audioPlayerQueue.setQueueIdsToDeactivate();
         audioPlayerQueue.setRules(QueueRules.disallowFeedback());
         return new InitiateResponse(request.getHeader().getMessageId(), audioPlayerQueue);
     }

@@ -23,7 +23,6 @@ public class Mp3ToAlexaCatalog {
         retval.setNames(asArrayList(new EntityName("en", mp3.getTitle())));
         retval.setDurationSeconds(mp3.getDurationSeconds());
         retval.setNaturalOrder(mp3.getTrackNumber());
-        retval.setLastTrackNumber(mp3.getLastTrackNumber());
         retval.setPopularity(Popularity.unratedWithNoOverrides());
         retval.setReleaseType("Studio Album");
         retval.setLastUpdatedTime(Calendar.getInstance());
