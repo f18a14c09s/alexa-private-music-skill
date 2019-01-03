@@ -2,6 +2,10 @@ package f18a14c09s.integration.alexa.music.catalog;
 
 import f18a14c09s.integration.alexa.data.Locale;
 import f18a14c09s.integration.alexa.music.catalog.data.AbstractCatalog;
+import f18a14c09s.integration.alexa.music.data.AbstractAudioQueue;
+import f18a14c09s.integration.alexa.music.data.AlbumAudioQueue;
+import f18a14c09s.integration.alexa.music.data.Art;
+import f18a14c09s.integration.alexa.music.data.ArtistAudioQueue;
 import f18a14c09s.integration.alexa.music.entities.AlbumReference;
 import f18a14c09s.integration.alexa.music.entities.ArtistReference;
 import f18a14c09s.integration.alexa.music.entities.BaseEntity;
@@ -57,17 +61,26 @@ public class CatalogDAO {
     }
 
     public void save(AbstractCatalog catalog) {
-        if (!entityManager.getTransaction().isActive()) {
-            entityManager.getTransaction().begin();
-        }
-        entityManager.persist(catalog);
+        saveEntity(catalog);
     }
 
     public void save(Locale locale) {
+        saveEntity(locale);
+    }
+
+    public void save(Art art) {
+        saveEntity(art);
+    }
+
+    public void save(AbstractAudioQueue audioQueue) {
+        saveEntity(audioQueue);
+    }
+
+    private void saveEntity(Object entity) {
         if (!entityManager.getTransaction().isActive()) {
             entityManager.getTransaction().begin();
         }
-        entityManager.persist(locale);
+        entityManager.persist(entity);
     }
 
     public void close(boolean commit) {
@@ -114,17 +127,26 @@ public class CatalogDAO {
         return entityManager.find(clazz, id);
     }
 
-    public Track findArtistFirstTrack(String id) {
-        List<Track> tracks = entityManager.createQuery(
-                "SELECT track FROM Track track JOIN track.artists artist JOIN track.albums album JOIN album.names albumName WHERE artist.id = :artistid ORDER BY albumName.value, track.trackNumber",
-                Track.class).setParameter("artistid", id).setMaxResults(1).getResultList();
-        return tracks.isEmpty() ? null : tracks.get(0);
+    public List<Track> findArtistTracks(String artistId) {
+        return entityManager.createQuery(
+                "SELECT track FROM Track track JOIN track.artists artist JOIN track.albums album JOIN album.names albumName WHERE artist.id = :artistid ORDER BY album.naturalOrder, albumName.value, track.naturalOrder",
+                Track.class).setParameter("artistid", artistId).setMaxResults(1).getResultList();
     }
 
-    public Track findAlbumFirstTrack(String id) {
-        List<Track> tracks = entityManager.createQuery(
-                "SELECT track FROM Track track JOIN track.albums album WHERE album.id = :albumid ORDER BY track.trackNumber",
-                Track.class).setParameter("albumid", id).setMaxResults(1).getResultList();
-        return tracks.isEmpty() ? null : tracks.get(0);
+    public List<Track> findAlbumTracks(String albumId) {
+        return entityManager.createQuery(
+                "SELECT track FROM Track track JOIN track.albums album WHERE album.id = :albumid ORDER BY track.naturalOrder",
+                Track.class).setParameter("albumid", albumId).setMaxResults(1).getResultList();
+    }
+
+    public ArtistAudioQueue findArtistQueue(String artistId) {
+        return entityManager.createQuery(
+                "SELECT o from ArtistAudioQueue o WHERE o.artist.id = :artistid",
+                ArtistAudioQueue.class).setParameter("artistid", artistId).getSingleResult();
+    }
+
+    public AlbumAudioQueue findAlbumQueue(String albumId) {
+        return entityManager.createQuery("SELECT o from AlbumAudioQueue o WHERE o.album.id = :albumid",
+                AlbumAudioQueue.class).setParameter("albumid", albumId).getSingleResult();
     }
 }

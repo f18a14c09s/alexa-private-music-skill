@@ -21,6 +21,9 @@
         <class>f18a14c09s.integration.alexa.data.Locale</class>
         <class>f18a14c09s.integration.alexa.music.data.Art</class>
         <class>f18a14c09s.integration.alexa.music.data.ArtSource</class>
+        <class>f18a14c09s.integration.alexa.music.data.AbstractAudioQueue</class>
+        <class>f18a14c09s.integration.alexa.music.data.ArtistAudioQueue</class>
+        <class>f18a14c09s.integration.alexa.music.data.AlbumAudioQueue</class>
         <exclude-unlisted-classes>true</exclude-unlisted-classes>
     </persistence-unit>
 </persistence>
