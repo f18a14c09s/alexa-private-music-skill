@@ -7,6 +7,7 @@ import f18a14c09s.integration.alexa.music.catalog.data.MusicGroupCatalog;
 import f18a14c09s.integration.alexa.music.catalog.data.MusicRecordingCatalog;
 import f18a14c09s.integration.alexa.music.data.Art;
 import f18a14c09s.integration.alexa.music.data.ArtSource;
+import f18a14c09s.integration.alexa.music.data.ArtSourceSize;
 import f18a14c09s.integration.alexa.music.entities.*;
 import f18a14c09s.integration.hibernate.Hbm2DdlAuto;
 import f18a14c09s.integration.json.JSONAdapter;
@@ -48,6 +49,7 @@ class PrivateMusicCataloguer {
     private JSONAdapter jsonAdapter = new JSONAdapter();
     private Locale en_US = Locale.en_US();
     private Art defaultArt;
+    private Map<EntityType, Map<List<String>, String>> entityIdsByTypeAndNaturalKey;
 
     PrivateMusicCataloguer(File srcDir,
                            File destDir,
@@ -61,9 +63,10 @@ class PrivateMusicCataloguer {
         this.reset = reset;
         this.writeToDisk = (destDir != null);
         this.writeToDb = writeToDb;
-        this.defaultArt = new DefaultArtObject(imageBaseUrl);
+        this.defaultArt = defaultArtObject(imageBaseUrl);
         if (writeToDb) {
             this.dao = new CatalogDAO(Hbm2DdlAuto.create);
+            this.entityIdsByTypeAndNaturalKey = dao.getCataloguedEntityIdsByTypeAndNaturalKey();
         }
     }
 
@@ -114,8 +117,9 @@ class PrivateMusicCataloguer {
                             .stream()
                             .map(mp3 -> new SongDTO(mp3,
                                     new Art(null,
-                                            folder.getImages()
-                                                    .stream()
+                                            Optional.ofNullable(folder.getImages())
+                                                    .map(Collection::stream)
+                                                    .orElse(Stream.empty())
                                                     .map(ImageMetadata::toArtSource)
                                                     .collect(Collectors.toList())))))
                     .collect(Collectors.toList());
@@ -197,6 +201,9 @@ class PrivateMusicCataloguer {
             track.setLocales(asArrayList(en_US));
             track.setUrl(buildUrl(metadata.getFilePath()));
             track.setArt(Optional.ofNullable(trackAndArt.getAlbumArt()).orElse(defaultArt));
+//
+            track.setId(Optional.of(entityIdsByTypeAndNaturalKey.get(EntityType.TRACK)
+                    .get(Collections.singletonList(track.getUrl()))).get());
             return track;
         }).collect(Collectors.toList());
         MusicRecordingCatalog trackCatalog = new MusicRecordingCatalog();
@@ -214,8 +221,9 @@ class PrivateMusicCataloguer {
                         .stream()
                         .map(mp3 -> new SongDTO(mp3,
                                 new Art(null,
-                                        folder.getImages()
-                                                .stream()
+                                        Optional.ofNullable(folder.getImages())
+                                                .map(Collection::stream)
+                                                .orElse(Stream.empty())
                                                 .map(ImageMetadata::toArtSource)
                                                 .collect(Collectors.toList())))))
                 .collect(Collectors.toList());
@@ -233,6 +241,7 @@ class PrivateMusicCataloguer {
                 .distinct()
                 .collect(Collectors.toMap(UnaryOperator.identity(), artistAlbum -> {
                     Album album = newAlbumEntity(artistAlbum.get(1));
+                    album.setId(Optional.of(entityIdsByTypeAndNaturalKey.get(EntityType.ALBUM).get(artistAlbum)).get());
                     album.setArtists(asArrayList(artists.get(artistAlbum.get(0))));
                     album.setArt(Optional.ofNullable(artByArtistNameAlbumName.get(artistAlbum))
                             .filter(list -> !list.isEmpty())
@@ -255,8 +264,9 @@ class PrivateMusicCataloguer {
                         .stream()
                         .map(mp3 -> new SongDTO(mp3,
                                 new Art(null,
-                                        folder.getImages()
-                                                .stream()
+                                        Optional.ofNullable(folder.getImages())
+                                                .map(Collection::stream)
+                                                .orElse(Stream.empty())
                                                 .map(ImageMetadata::toArtSource)
                                                 .collect(Collectors.toList())))))
                 .collect(Collectors.toList());
@@ -414,8 +424,29 @@ class PrivateMusicCataloguer {
         retval.setNames(asArrayList(new EntityName("en", artistName)));
         retval.setPopularity(Popularity.unratedWithNoOverrides());
         retval.setLastUpdatedTime(Calendar.getInstance());
-        retval.setId(UUID.randomUUID().toString());
+        retval.setId(Optional.of(entityIdsByTypeAndNaturalKey.get(EntityType.ARTIST)
+                .get(Collections.singletonList(artistName))).get());
+//        retval.setId(UUID.randomUUID().toString());
         retval.setLocales(asArrayList(en_US));
+        return retval;
+    }
+
+    private Art defaultArtObject(String baseUrl) throws IOException {
+        Art retval = new Art();
+        final String musicIconRelativePath = "minduka/music-icon";
+        retval.setContentDescription("Music icon (A. Minduka, https://openclipart.org/detail/27648/music-icon).");
+        List<ArtSource> sources = new ArrayList<>();
+        for (String png : new String[]{"small", "medium", "large"}) {
+            String relativePath = String.format("%s/%s.png", musicIconRelativePath, png);
+            try (InputStream inputStream = getClass().getResourceAsStream(String.format("/images/%s", relativePath))) {
+                BufferedImage bufferedImage = ImageIO.read(inputStream);
+                long width = bufferedImage.getWidth();
+                long height = bufferedImage.getHeight();
+                String url = String.format("%s/%s", baseUrl, relativePath);
+                sources.add(new ArtSource(url, ArtSourceSize.valueOf(width, height), width, height));
+            }
+        }
+        retval.setSources(sources);
         return retval;
     }
 

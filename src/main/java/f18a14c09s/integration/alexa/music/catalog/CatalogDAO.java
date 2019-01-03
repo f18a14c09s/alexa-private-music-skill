@@ -3,16 +3,14 @@ package f18a14c09s.integration.alexa.music.catalog;
 import f18a14c09s.integration.alexa.data.Locale;
 import f18a14c09s.integration.alexa.music.catalog.data.AbstractCatalog;
 import f18a14c09s.integration.alexa.music.data.Art;
-import f18a14c09s.integration.alexa.music.entities.AlbumReference;
-import f18a14c09s.integration.alexa.music.entities.ArtistReference;
-import f18a14c09s.integration.alexa.music.entities.BaseEntity;
-import f18a14c09s.integration.alexa.music.entities.Track;
+import f18a14c09s.integration.alexa.music.entities.*;
 import f18a14c09s.integration.aws.AwsSecretsAdapter;
 import f18a14c09s.integration.hibernate.Hbm2DdlAuto;
 
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.Persistence;
+import javax.persistence.Query;
 import javax.persistence.criteria.CriteriaBuilder;
 import javax.persistence.criteria.CriteriaQuery;
 import javax.persistence.criteria.Root;
@@ -130,5 +128,35 @@ public class CatalogDAO {
         return entityManager.createQuery(
                 "SELECT track FROM Track track JOIN track.albums album WHERE album.id = :albumid ORDER BY track.naturalOrder",
                 Track.class).setParameter("albumid", albumId).setMaxResults(1).getResultList();
+    }
+
+    public Map<EntityType, Map<List<String>, String>> getCataloguedEntityIdsByTypeAndNaturalKey() {
+        Map<EntityType, Map<List<String>, String>> retval = new HashMap<>();
+        Query query = entityManager.createNativeQuery(
+                "SELECT entity_id, entity_type, artist_name, album_name, song_url FROM catalogued_music_entities");
+        ((List<?>) query.getResultList()).stream().map(Object[].class::cast).forEach(row -> {
+            String entityId = (String) row[0];
+            EntityType entityType = EntityType.valueOf((String) row[1]);
+            List<String> key;
+            switch (entityType) {
+                case ARTIST: {
+                    key = Collections.singletonList((String) row[2]);
+                    break;
+                }
+                case ALBUM: {
+                    key = Arrays.asList((String) row[2], (String) row[3]);
+                    break;
+                }
+                case TRACK: {
+                    key = Collections.singletonList((String) row[4]);
+                    break;
+                }
+                default: {
+                    throw new RuntimeException("Unexpected entity type.");
+                }
+            }
+            retval.computeIfAbsent(entityType, k -> new HashMap<>()).put(key, entityId);
+        });
+        return retval;
     }
 }
