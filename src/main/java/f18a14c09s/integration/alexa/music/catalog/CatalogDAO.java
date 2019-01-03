@@ -121,13 +121,13 @@ public class CatalogDAO {
     public List<Track> findArtistTracks(String artistId) {
         return entityManager.createQuery(
                 "SELECT track FROM Track track JOIN track.artists artist JOIN track.albums album JOIN album.names albumName WHERE artist.id = :artistid ORDER BY album.naturalOrder, albumName.value, track.naturalOrder",
-                Track.class).setParameter("artistid", artistId).setMaxResults(1).getResultList();
+                Track.class).setParameter("artistid", artistId).getResultList();
     }
 
     public List<Track> findAlbumTracks(String albumId) {
         return entityManager.createQuery(
                 "SELECT track FROM Track track JOIN track.albums album WHERE album.id = :albumid ORDER BY track.naturalOrder",
-                Track.class).setParameter("albumid", albumId).setMaxResults(1).getResultList();
+                Track.class).setParameter("albumid", albumId).getResultList();
     }
 
     public Map<EntityType, Map<List<String>, String>> getCataloguedEntityIdsByTypeAndNaturalKey() {
