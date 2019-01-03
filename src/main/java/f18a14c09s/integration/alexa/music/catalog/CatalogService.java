@@ -1,14 +1,16 @@
 package f18a14c09s.integration.alexa.music.catalog;
 
-import f18a14c09s.integration.alexa.music.data.AbstractAudioQueue;
-import f18a14c09s.integration.alexa.music.data.AlbumAudioQueue;
-import f18a14c09s.integration.alexa.music.data.ArtistAudioQueue;
+import f18a14c09s.integration.alexa.music.control.data.AdjustItemControl;
+import f18a14c09s.integration.alexa.music.control.data.CommandItemControl;
+import f18a14c09s.integration.alexa.music.data.Item;
+import f18a14c09s.integration.alexa.music.data.ItemRules;
+import f18a14c09s.integration.alexa.music.data.Stream;
 import f18a14c09s.integration.alexa.music.entities.Album;
 import f18a14c09s.integration.alexa.music.entities.Artist;
 import f18a14c09s.integration.alexa.music.entities.BaseEntity;
 import f18a14c09s.integration.alexa.music.entities.Track;
+import f18a14c09s.integration.alexa.music.playback.data.PlaybackInfo;
 
-import javax.persistence.NoResultException;
 import java.io.IOException;
 import java.util.*;
 
@@ -19,14 +21,14 @@ public class CatalogService {
         this.dao = new CatalogDAO();
     }
 
-    public Track getFirstTrack(String contentId) {
+    public Item getFirstTrack(String contentId) {
         BaseEntity entity = dao.findEntity(BaseEntity.class, contentId);
         if (entity instanceof Artist) {
             return findArtistFirstTrack(contentId);
         } else if (entity instanceof Album) {
             return findAlbumFirstTrack(contentId);
         } else if (entity instanceof Track) {
-            return (Track) entity;
+            return toItem(Collections.singletonList((Track) entity), 0);
         } else {
             throw new UnsupportedOperationException(String.format(
                     "Not sure how to get the first track for entity %s of type: %s.",
@@ -38,73 +40,104 @@ public class CatalogService {
         }
     }
 
-    private Track findArtistFirstTrack(String id) {
-        List<Track> tracks;
-        try {
-            ArtistAudioQueue queue = dao.findArtistQueue(id);
-            tracks = queue.getTracks();
-        } catch (NoResultException e) {
-            Artist artist = dao.findEntity(Artist.class, id);
-            tracks = dao.findArtistTracks(id);
-            ArtistAudioQueue queue = new ArtistAudioQueue();
-            queue.setArtist(artist);
-            queue.setTracks(tracks);
-            dao.save(queue);
+    public Item getPreviousTrack(String contentId, String currentTrackId) {
+        BaseEntity entity = dao.findEntity(BaseEntity.class, contentId);
+        if (entity instanceof Artist) {
+            return findArtistPreviousTrack(contentId, currentTrackId);
+        } else if (entity instanceof Album) {
+            return findAlbumPreviousTrack(contentId, currentTrackId);
+        } else {
+            throw new UnsupportedOperationException(String.format(
+                    "Not sure how to get the previous track for entity %s of type: %s.",
+                    contentId,
+                    Optional.ofNullable(entity)
+                            .map(Object::getClass)
+                            .map(Class::getName)
+                            .orElse("Unknown, as the object is null")));
         }
-        return tracks.isEmpty() ? null : tracks.get(0);
     }
 
-    private Track extractPreviousTrack(String currentTrackId, AbstractAudioQueue queue) {
-        for (int i = 0; i < queue.getTracks().size(); i++) {
-            if (queue.getTracks().get(i).getId().equals(currentTrackId)) {
-                return queue.getTracks().get(i - 1);
+    public Item getNextTrack(String contentId, String currentTrackId) {
+        BaseEntity entity = dao.findEntity(BaseEntity.class, contentId);
+        if (entity instanceof Artist) {
+            return findArtistNextTrack(contentId, currentTrackId);
+        } else if (entity instanceof Album) {
+            return findAlbumNextTrack(contentId, currentTrackId);
+        } else {
+            throw new UnsupportedOperationException(String.format(
+                    "Not sure how to get the next track for entity %s of type: %s.",
+                    contentId,
+                    Optional.ofNullable(entity)
+                            .map(Object::getClass)
+                            .map(Class::getName)
+                            .orElse("Unknown, as the object is null")));
+        }
+    }
+
+    private Item findArtistFirstTrack(String id) {
+        List<Track> tracks = dao.findArtistTracks(id);
+        return toItem(tracks, 0);
+    }
+
+    private Item toItem(List<Track> tracks, int j) {
+        Track firstTrack = tracks.get(j);
+        Item item = new Item();
+        item.setControls(Arrays.asList(CommandItemControl.previous(j > 0),
+                CommandItemControl.next(j + 1 < tracks.size()),
+                AdjustItemControl.seekPosition(false)));
+        item.setDurationInMilliseconds(Optional.ofNullable(firstTrack.getDurationSeconds())
+                .map(seconds -> seconds * 1000L)
+                .orElse(null));
+        item.setId(firstTrack.getId());
+        item.setMetadata(firstTrack.toMediaMetadata());
+        item.setPlaybackInfo(PlaybackInfo.defaultType());
+        item.setRules(ItemRules.disallowFeedback());
+        Calendar validUntil = Calendar.getInstance();
+        validUntil.add(Calendar.YEAR, 1);
+        item.setStream(new Stream(firstTrack.getId(), firstTrack.getUrl(), 0L, validUntil));
+        return item;
+    }
+
+    private Item extractPreviousTrack(String currentTrackId, List<Track> tracks) {
+        for (int i = 0; i < tracks.size(); i++) {
+            if (tracks.get(i).getId().equals(currentTrackId)) {
+                return toItem(tracks, i - 1);
             }
         }
         return null;
     }
 
-    private Track extractNextTrack(String currentTrackId, AbstractAudioQueue queue) {
-        for (int i = 0; i < queue.getTracks().size(); i++) {
-            if (queue.getTracks().get(i).getId().equals(currentTrackId)) {
-                return queue.getTracks().get(i + 1);
+    private Item extractNextTrack(String currentTrackId, List<Track> tracks) {
+        for (int i = 0; i < tracks.size(); i++) {
+            if (tracks.get(i).getId().equals(currentTrackId)) {
+                return toItem(tracks, i + 1);
             }
         }
         return null;
     }
 
-    private Track findArtistPreviousTrack(String artistId, String currentTrackId) {
-        ArtistAudioQueue queue = dao.findArtistQueue(artistId);
-        return extractPreviousTrack(currentTrackId, queue);
+    private Item findArtistPreviousTrack(String artistId, String currentTrackId) {
+        List<Track> tracks = dao.findArtistTracks(artistId);
+        return extractPreviousTrack(currentTrackId, tracks);
     }
 
-    private Track findArtistNextTrack(String artistId, String currentTrackId) {
-        ArtistAudioQueue queue = dao.findArtistQueue(artistId);
-        return extractNextTrack(currentTrackId, queue);
+    private Item findArtistNextTrack(String artistId, String currentTrackId) {
+        List<Track> tracks = dao.findArtistTracks(artistId);
+        return extractNextTrack(currentTrackId, tracks);
     }
 
-    private Track findAlbumFirstTrack(String id) {
-        List<Track> tracks;
-        try {
-            AlbumAudioQueue queue = dao.findAlbumQueue(id);
-            tracks = queue.getTracks();
-        } catch (NoResultException e) {
-            Album album = dao.findEntity(Album.class, id);
-            tracks = dao.findAlbumTracks(id);
-            AlbumAudioQueue queue = new AlbumAudioQueue();
-            queue.setAlbum(album);
-            queue.setTracks(tracks);
-            dao.save(queue);
-        }
-        return tracks.isEmpty() ? null : tracks.get(0);
+    private Item findAlbumFirstTrack(String id) {
+        List<Track> tracks = dao.findAlbumTracks(id);
+        return toItem(tracks, 0);
     }
 
-    private Track findAlbumPreviousTrack(String albumId, String currentTrackId) {
-        AlbumAudioQueue queue = dao.findAlbumQueue(albumId);
-        return extractPreviousTrack(currentTrackId, queue);
+    private Item findAlbumPreviousTrack(String albumId, String currentTrackId) {
+        List<Track> tracks = dao.findAlbumTracks(albumId);
+        return extractPreviousTrack(currentTrackId, tracks);
     }
 
-    private Track findAlbumNextTrack(String albumId, String currentTrackId) {
-        AlbumAudioQueue queue = dao.findAlbumQueue(albumId);
-        return extractNextTrack(currentTrackId, queue);
+    private Item findAlbumNextTrack(String albumId, String currentTrackId) {
+        List<Track> tracks = dao.findAlbumTracks(albumId);
+        return extractNextTrack(currentTrackId, tracks);
     }
 }
