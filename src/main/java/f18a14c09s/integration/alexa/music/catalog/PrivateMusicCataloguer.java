@@ -79,7 +79,7 @@ class PrivateMusicCataloguer {
         }
 //        System.out.printf("Locale %s-%s has ID %s.%n", en_US.getLanguage(), en_US.getCountry(), en_US.getId());
         Mp3Folder rootMp3Folder = collectTrackInfoRecursively(srcDir, 0);
-        printFolderSummary(rootMp3Folder);
+//        printFolderSummary(rootMp3Folder);
         List<Mp3Folder> mp3Folders = new ArrayList<>();
         mp3FoldersAddAllRecursive(rootMp3Folder, mp3Folders);
         mp3Folders.forEach(folder -> folder.getMp3s().forEach(track -> {
@@ -115,13 +115,7 @@ class PrivateMusicCataloguer {
             List<SongDTO> tracks = mp3Folders.stream()
                     .flatMap(folder -> folder.getMp3s()
                             .stream()
-                            .map(mp3 -> new SongDTO(mp3,
-                                    new Art(null,
-                                            Optional.ofNullable(folder.getImages())
-                                                    .map(Collection::stream)
-                                                    .orElse(Stream.empty())
-                                                    .map(ImageMetadata::toArtSource)
-                                                    .collect(Collectors.toList())))))
+                            .map(mp3 -> new SongDTO(mp3, Optional.ofNullable(folder.getArt()).orElse(defaultArt))))
                     .collect(Collectors.toList());
             catalogTracks(tracks, artists, albums);
             printDbSummary();
@@ -136,39 +130,39 @@ class PrivateMusicCataloguer {
         folder.getChildren().forEach(child -> mp3FoldersAddAllRecursive(child, mp3Folders));
     }
 
-    private void printFolderSummary(Mp3Folder rootMp3Folder) {
-        System.out.printf(
-                "Root Folder:%n\tHas Mp3s: %s" + "%n\tLikely Artist Folders: %s%n\tNot Likely Artist Folders: %s" +
-                        "%n\tLikely Album Folders: %s%n\tNot Likely Album Folders: %s" +
-                        "%n\tNon-Unique Artist Names:%s%n" + "%n\tNon-Unique Album Names:%s%n",
-                !rootMp3Folder.getMp3s().isEmpty(),
-                rootMp3Folder.getChildren().stream().filter(Mp3Folder::isLikelyArtistFolder).count(),
-                rootMp3Folder.getChildren()
-                        .stream()
-                        .filter(((Predicate<Mp3Folder>) Mp3Folder::isLikelyArtistFolder).negate())
-                        .count(),
-                rootMp3Folder.getChildren().stream().filter(Mp3Folder::isLikelyAlbumFolder).count(),
-                rootMp3Folder.getChildren()
-                        .stream()
-                        .filter(((Predicate<Mp3Folder>) Mp3Folder::isLikelyAlbumFolder).negate())
-                        .count(),
-                rootMp3Folder.getChildren()
-                        .stream()
-                        .filter(child -> child.isLikelyArtistFolder() && child.getUniqueArtistNames().size() != 1)
-                        .map(child -> String.format("%n\t\tNon-Unique Names (%s total): %s",
-                                child.getUniqueArtistNames().size(),
-                                child.getUniqueArtistNames()))
-                        .collect(Collectors.joining()),
-                rootMp3Folder.getChildren()
-                        .stream()
-                        .flatMap(child -> Stream.concat(Stream.of(child),
-                                child.getChildren() == null ? Stream.empty() : child.getChildren().stream()))
-                        .filter(child -> child.isLikelyAlbumFolder() && child.getUniqueAlbumNames().size() != 1)
-                        .map(child -> String.format("%n\t\tNon-Unique Names (%s total): %s",
-                                child.getUniqueAlbumNames().size(),
-                                child.getUniqueAlbumNames()))
-                        .collect(Collectors.joining()));
-    }
+//    private void printFolderSummary(Mp3Folder rootMp3Folder) {
+//        System.out.printf(
+//                "Root Folder:%n\tHas Mp3s: %s" + "%n\tLikely Artist Folders: %s%n\tNot Likely Artist Folders: %s" +
+//                        "%n\tLikely Album Folders: %s%n\tNot Likely Album Folders: %s" +
+//                        "%n\tNon-Unique Artist Names:%s%n" + "%n\tNon-Unique Album Names:%s%n",
+//                !rootMp3Folder.getMp3s().isEmpty(),
+//                rootMp3Folder.getChildren().stream().filter(Mp3Folder::isLikelyArtistFolder).count(),
+//                rootMp3Folder.getChildren()
+//                        .stream()
+//                        .filter(((Predicate<Mp3Folder>) Mp3Folder::isLikelyArtistFolder).negate())
+//                        .count(),
+//                rootMp3Folder.getChildren().stream().filter(Mp3Folder::isLikelyAlbumFolder).count(),
+//                rootMp3Folder.getChildren()
+//                        .stream()
+//                        .filter(((Predicate<Mp3Folder>) Mp3Folder::isLikelyAlbumFolder).negate())
+//                        .count(),
+//                rootMp3Folder.getChildren()
+//                        .stream()
+//                        .filter(child -> child.isLikelyArtistFolder() && child.getUniqueArtistNames().size() != 1)
+//                        .map(child -> String.format("%n\t\tNon-Unique Names (%s total): %s",
+//                                child.getUniqueArtistNames().size(),
+//                                child.getUniqueArtistNames()))
+//                        .collect(Collectors.joining()),
+//                rootMp3Folder.getChildren()
+//                        .stream()
+//                        .flatMap(child -> Stream.concat(Stream.of(child),
+//                                child.getChildren() == null ? Stream.empty() : child.getChildren().stream()))
+//                        .filter(child -> child.isLikelyAlbumFolder() && child.getUniqueAlbumNames().size() != 1)
+//                        .map(child -> String.format("%n\t\tNon-Unique Names (%s total): %s",
+//                                child.getUniqueAlbumNames().size(),
+//                                child.getUniqueAlbumNames()))
+//                        .collect(Collectors.joining()));
+//    }
 
     private void printDbSummary() {
         for (Class<?> clazz : asArrayList(Locale.class,
@@ -219,13 +213,7 @@ class PrivateMusicCataloguer {
         List<SongDTO> tracks = mp3Folders.stream()
                 .flatMap(folder -> folder.getMp3s()
                         .stream()
-                        .map(mp3 -> new SongDTO(mp3,
-                                new Art(null,
-                                        Optional.ofNullable(folder.getImages())
-                                                .map(Collection::stream)
-                                                .orElse(Stream.empty())
-                                                .map(ImageMetadata::toArtSource)
-                                                .collect(Collectors.toList())))))
+                        .map(mp3 -> new SongDTO(mp3, Optional.ofNullable(folder.getArt()).orElse(defaultArt))))
                 .collect(Collectors.toList());
         Map<List<String>, List<Art>> artByArtistNameAlbumName = tracks.stream()
                 .collect(Collectors.groupingBy(track -> asArrayList(track.getTrack().getAuthor(),
@@ -262,13 +250,7 @@ class PrivateMusicCataloguer {
         List<SongDTO> tracks = mp3Folders.stream()
                 .flatMap(folder -> folder.getMp3s()
                         .stream()
-                        .map(mp3 -> new SongDTO(mp3,
-                                new Art(null,
-                                        Optional.ofNullable(folder.getImages())
-                                                .map(Collection::stream)
-                                                .orElse(Stream.empty())
-                                                .map(ImageMetadata::toArtSource)
-                                                .collect(Collectors.toList())))))
+                        .map(mp3 -> new SongDTO(mp3, Optional.ofNullable(folder.getArt()).orElse(defaultArt))))
                 .collect(Collectors.toList());
         Map<String, List<Art>> artistNameToArt = tracks.stream()
                 .collect(Collectors.groupingBy(track -> track.getTrack().getAuthor(),
@@ -308,7 +290,6 @@ class PrivateMusicCataloguer {
     }
 
     private Mp3Folder collectTrackInfoRecursively(File dir, int level) throws IOException, NoSuchAlgorithmException {
-        Mp3Folder retval = new Mp3Folder(collectTrackMetadata(dir), collectAlbumArt(dir), level);
         List<Mp3Folder> children = new ArrayList<>();
         List<File> subdirs = Optional.ofNullable(dir.listFiles(File::isDirectory))
                 .map(Arrays::asList)
@@ -316,8 +297,7 @@ class PrivateMusicCataloguer {
         for (File subdir : subdirs) {
             children.add(collectTrackInfoRecursively(subdir, level + 1));
         }
-        retval.setChildren(children);
-        return retval;
+        return new Mp3Folder(collectTrackMetadata(dir), collectAlbumArt(dir), level, children);
     }
 
     private List<TrackMetadata> collectTrackMetadata(File dir) throws IOException {

@@ -2,38 +2,48 @@ package f18a14c09s.integration.mp3;
 
 import f18a14c09s.integration.alexa.music.data.Art;
 import f18a14c09s.integration.alexa.music.data.ArtSourceSize;
+import lombok.AccessLevel;
 import lombok.Getter;
-import lombok.Setter;
 
 import java.util.*;
 import java.util.function.*;
 import java.util.stream.*;
 
-@Getter
-@Setter
+//@Getter
+//@Setter
 public class Mp3Folder {
+    @Getter
     private List<TrackMetadata> mp3s;
 
+    @Getter(AccessLevel.PRIVATE)
     private List<ImageMetadata> images;
 
+    @Getter
     private List<Mp3Folder> children;
 
+    @Getter(AccessLevel.PRIVATE)
     private int hierarchyLevel;
 
-    public Mp3Folder() {
-    }
+    @Getter
+    private Art art;
 
-    public Mp3Folder(List<TrackMetadata> mp3s, List<ImageMetadata> images, int hierarchyLevel) {
+    public Mp3Folder(List<TrackMetadata> mp3s,
+                     List<ImageMetadata> images,
+                     int hierarchyLevel,
+                     List<Mp3Folder> children) {
         this.mp3s = mp3s;
         this.images = images;
         this.hierarchyLevel = hierarchyLevel;
+        this.children = children;
+        //
+        this.art = toArt(images);
     }
 
-    public Collection<ImageMetadata> getExactlyOneImagePerArtSourceSize() {
-        if (getImages() == null || getImages().isEmpty()) {
-            return getImages();
+    private Collection<ImageMetadata> getExactlyOneImagePerArtSourceSize(List<ImageMetadata> images) {
+        if (images == null || images.isEmpty()) {
+            return images;
         } else {
-            Map<ArtSourceSize, ImageMetadata> imagesBySize = getImages().stream()
+            Map<ArtSourceSize, ImageMetadata> imagesBySize = images.stream()
                     .collect(Collectors.groupingBy(ImageMetadata::getArtSourceSize))
                     .values()
                     .stream()
@@ -54,9 +64,9 @@ public class Mp3Folder {
         }
     }
 
-    public Art toArt() {
+    private Art toArt(List<ImageMetadata> images) {
         return new Art(null,
-                getExactlyOneImagePerArtSourceSize().stream()
+                getExactlyOneImagePerArtSourceSize(images).stream()
                         .map(ImageMetadata::toArtSource)
                         .collect(Collectors.toList()));
     }
