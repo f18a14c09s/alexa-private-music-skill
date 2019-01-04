@@ -29,10 +29,6 @@ public class ImageMetadata {
         return ArtSourceSize.valueOf(getWidth(), getHeight());
     }
 
-    public ArtSource toArtSource() {
-        return new ArtSource(getUrl(), getArtSourceSize(), getWidth(), getHeight());
-    }
-
     @Override
     public int hashCode() {
         return Optional.ofNullable(sha256Hash).map(String::hashCode).orElse(0);
