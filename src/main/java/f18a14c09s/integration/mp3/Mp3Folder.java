@@ -3,7 +3,6 @@ package f18a14c09s.integration.mp3;
 import f18a14c09s.integration.alexa.music.catalog.AlbumKey;
 import f18a14c09s.integration.alexa.music.data.Art;
 import f18a14c09s.integration.alexa.music.data.ArtSource;
-import f18a14c09s.integration.alexa.music.data.ArtSourceSize;
 import f18a14c09s.integration.alexa.music.entities.Album;
 import f18a14c09s.integration.alexa.music.entities.Artist;
 import f18a14c09s.integration.alexa.music.entities.EntityName;
@@ -12,9 +11,9 @@ import lombok.AccessLevel;
 import lombok.Getter;
 
 import java.util.*;
-import java.util.function.*;
 import java.util.stream.*;
 
+import static f18a14c09s.integration.mp3.ImageMetadata.getExactlyOnePerSize;
 import static f18a14c09s.util.CollectionUtil.asArrayList;
 
 public class Mp3Folder {
@@ -61,34 +60,8 @@ public class Mp3Folder {
 //        this.artists = artists;
     }
 
-    private static Map<ArtSourceSize, ImageMetadata> getExactlyOneImagePerArtSourceSize(List<ImageMetadata> images) {
-        if (images == null || images.isEmpty()) {
-            return null;
-        } else {
-            Map<ArtSourceSize, ImageMetadata> imagesBySize = images.stream()
-                    .filter(image -> image.getArtSourceSize() != null)
-                    .collect(Collectors.groupingBy(ImageMetadata::getArtSourceSize))
-                    .values()
-                    .stream()
-                    .map(Iterable::iterator)
-                    .map(Iterator::next)
-                    .collect(Collectors.toMap(ImageMetadata::getArtSourceSize, UnaryOperator.identity()));
-            for (ArtSourceSize size : Arrays.stream(ArtSourceSize.values())
-                    .filter(size -> !imagesBySize.containsKey(size))
-                    .collect(Collectors.toSet())) {
-                for (ArtSourceSize altSize : size.getAlternateSizesByPriority()) {
-                    if (imagesBySize.containsKey(altSize)) {
-                        imagesBySize.put(size, imagesBySize.get(altSize));
-                        break;
-                    }
-                }
-            }
-            return imagesBySize;
-        }
-    }
-
     private static Art toArt(List<ImageMetadata> images) {
-        return Optional.ofNullable(getExactlyOneImagePerArtSourceSize(images))
+        return Optional.ofNullable(getExactlyOnePerSize(images))
                 .map(Map::entrySet)
                 .map(Collection::stream)
                 .map(stream -> stream.map(entry -> new ArtSource(entry.getValue().getUrl(),

@@ -23,7 +23,9 @@ public class PrivateMusicCataloguerCLI {
         cli.catalogMusic();
     }
 
-    private static PrivateMusicCataloguer newCataloguer(Map<String, List<Object>> args) throws IOException {
+    private static PrivateMusicCataloguer newCataloguer(Map<String, List<Object>> args) throws
+            IOException,
+            NoSuchAlgorithmException {
         List<String> validationErrors = new ArrayList<>();
         File src = null, dest = null;
         String baseUrl = null;

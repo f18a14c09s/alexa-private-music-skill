@@ -49,6 +49,8 @@ class PrivateMusicCataloguer {
     private Mp3Adapter mp3Adapter = new Mp3Adapter();
     private Mp3ToAlexaCatalog mp3ToAlexaCatalog = new Mp3ToAlexaCatalog();
     private JSONAdapter jsonAdapter = new JSONAdapter();
+    private MessageDigest sha256Digester = MessageDigest.getInstance("SHA-256");
+    private Base64.Encoder base64Encoder = Base64.getEncoder();
     private Locale en_US = Locale.en_US();
     private Art defaultArt;
     private Map<EntityType, Map<List<String>, String>> entityIdsByTypeAndNaturalKey;
@@ -58,7 +60,7 @@ class PrivateMusicCataloguer {
                            String baseUrl,
                            boolean reset,
                            String imageBaseUrl,
-                           boolean writeToDb) throws IOException {
+                           boolean writeToDb) throws IOException, NoSuchAlgorithmException {
         this.srcDir = srcDir;
         this.destDir = destDir;
         this.baseUrl = baseUrl;
@@ -114,7 +116,7 @@ class PrivateMusicCataloguer {
                                 }
                                 return lhs;
                             }));
-            List<SongDTO> tracks = new ArrayList<>();
+//            List<SongDTO> tracks = new ArrayList<>();
 //            mp3Folders.stream()
 //                    .flatMap(folder -> folder.getMp3s()
 //                            .stream()
@@ -419,36 +421,38 @@ class PrivateMusicCataloguer {
                         name.substring(name.length() - JPGEXT.length()).equalsIgnoreCase(JPGEXT) &&
                         (name.startsWith("ALBUM~") || name.startsWith("AlbumArt")))
                 .orElse(false)));
-        MessageDigest sha256Digester = MessageDigest.getInstance("SHA-256");
-        Base64.Encoder base64Encoder = Base64.getEncoder();
         return optionalJpgs.filter(jpgs -> jpgs.length >= 1).map(jpgs -> Arrays.stream(jpgs).map(jpg -> {
-            Long width, height;
-            String sha256Hash;
-            try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-                try (FileInputStream fis = new FileInputStream(jpg);
-                     BufferedInputStream bis = new BufferedInputStream(fis)) {
-                    for (int b = bis.read(); b >= 0; b = bis.read()) {
-                        baos.write(b);
-                    }
-                }
-                baos.flush();
-                sha256Hash = base64Encoder.encodeToString(sha256Digester.digest(baos.toByteArray()));
-                try (ByteArrayInputStream bais = new ByteArrayInputStream(baos.toByteArray())) {
-                    BufferedImage image = ImageIO.read(bais);
-                    if (image == null) {
-                        width = null;
-                        height = null;
-                    } else {
-                        width = (long) image.getWidth();
-                        height = (long) image.getHeight();
-                    }
-                }
+            try (FileInputStream fis = new FileInputStream(jpg)) {
+                return newImageMetadata(fis, buildUrl(srcDir.toPath().relativize(jpg.toPath())));
             } catch (IOException e) {
-                throw new RuntimeException("Failed to read image dimensions.  File: " + jpg.getAbsolutePath() + ".", e);
+                throw new RuntimeException("Failed to access image " + jpg.getAbsolutePath() + ".", e);
             }
-            String url = buildUrl(srcDir.toPath().relativize(jpg.toPath()));
-            return new ImageMetadata(url, sha256Hash, width, height);
         }).distinct().collect(Collectors.toList())).orElse(null);
+    }
+
+    private ImageMetadata newImageMetadata(InputStream fis, String url) throws IOException {
+        Long width, height;
+        String sha256Hash;
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            try (BufferedInputStream bis = new BufferedInputStream(fis)) {
+                for (int b = bis.read(); b >= 0; b = bis.read()) {
+                    baos.write(b);
+                }
+            }
+            baos.flush();
+            sha256Hash = base64Encoder.encodeToString(sha256Digester.digest(baos.toByteArray()));
+            try (ByteArrayInputStream bais = new ByteArrayInputStream(baos.toByteArray())) {
+                BufferedImage image = ImageIO.read(bais);
+                if (image == null) {
+                    width = null;
+                    height = null;
+                } else {
+                    width = (long) image.getWidth();
+                    height = (long) image.getHeight();
+                }
+            }
+        }
+        return new ImageMetadata(url, sha256Hash, width, height);
     }
 
     private String buildUrl(Path relativePath) {
@@ -490,18 +494,24 @@ class PrivateMusicCataloguer {
         Art retval = new Art();
         final String musicIconRelativePath = "minduka/music-icon";
         retval.setContentDescription("Music icon (A. Minduka, https://openclipart.org/detail/27648/music-icon).");
-        List<ArtSource> sources = new ArrayList<>();
+        List<ImageMetadata> imageMetadata = new ArrayList<>();
         for (String png : new String[]{"small", "medium", "large"}) {
             String relativePath = String.format("%s/%s.png", musicIconRelativePath, png);
             try (InputStream inputStream = getClass().getResourceAsStream(String.format("/images/%s", relativePath))) {
-                BufferedImage bufferedImage = ImageIO.read(inputStream);
-                long width = bufferedImage.getWidth();
-                long height = bufferedImage.getHeight();
                 String url = String.format("%s/%s", baseUrl, relativePath);
-                sources.add(new ArtSource(url, ArtSourceSize.valueOf(width, height), width, height));
+                ImageMetadata img = newImageMetadata(inputStream, url);
+                img.setArtSourceSize(Optional.of(ArtSourceSize.valueOf(png.toUpperCase())).get());
+                imageMetadata.add(img);
             }
         }
-        retval.setSources(sources);
+        retval.setSources(ImageMetadata.getExactlyOnePerSize(imageMetadata)
+                .entrySet()
+                .stream()
+                .map(entry -> new ArtSource(entry.getValue().getUrl(),
+                        entry.getKey(),
+                        entry.getValue().getWidth(),
+                        entry.getValue().getHeight()))
+                .collect(Collectors.toList()));
         return retval;
     }
 
