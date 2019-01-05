@@ -36,21 +36,20 @@ import static f18a14c09s.util.CollectionUtil.asArrayList;
 class PrivateMusicCataloguer {
     public static final String MP3EXT = ".mp3";
     public static final String JPGEXT = ".jpg";
-    private boolean reset = true;
+    private boolean reset;
     private boolean writeToDisk;
     private boolean writeToDb;
     private File srcDir;
     private File destDir;
     private String baseUrl;
     private CatalogDAO dao;
-    private Mp3Adapter mp3Adapter = new Mp3Adapter();
-    private Mp3ToAlexaCatalog mp3ToAlexaCatalog = new Mp3ToAlexaCatalog();
-    private JSONAdapter jsonAdapter = new JSONAdapter();
-    private MessageDigest sha256Digester = MessageDigest.getInstance("SHA-256");
-    private Base64.Encoder base64Encoder = Base64.getEncoder();
-    private Locale en_US = Locale.en_US();
+    private EntityFactory entityFactory;
+    private Mp3Adapter mp3Adapter;
+    private JSONAdapter jsonAdapter;
+    private MessageDigest sha256Digester;
+    private Base64.Encoder base64Encoder;
+    private Locale en_US;
     private Art defaultArt;
-    private Map<EntityType, Map<List<String>, String>> entityIdsByTypeAndNaturalKey;
 
     PrivateMusicCataloguer(File srcDir,
                            File destDir,
@@ -65,19 +64,24 @@ class PrivateMusicCataloguer {
         this.writeToDisk = (destDir != null);
         this.writeToDb = writeToDb;
         this.defaultArt = defaultArtObject(imageBaseUrl);
+        this.en_US = Locale.en_US();
+        this.mp3Adapter = new Mp3Adapter();
+        this.jsonAdapter = new JSONAdapter();
+        this.sha256Digester = MessageDigest.getInstance("SHA-256");
+        this.base64Encoder = Base64.getEncoder();
+        Map<EntityType, Map<List<String>, String>> entityIdsByTypeAndNaturalKey = null;
         if (writeToDb) {
             this.dao = new CatalogDAO(Hbm2DdlAuto.create);
-            this.entityIdsByTypeAndNaturalKey = dao.getCataloguedEntityIdsByTypeAndNaturalKey();
-        }
-    }
-
-    void catalogMusic() throws IOException, NoSuchAlgorithmException {
-        if (writeToDb) {
             dao.save(en_US);
             dao.save(defaultArt);
             dao.commit();
             en_US = dao.findLocale(en_US.getCountry(), en_US.getLanguage());
+            entityIdsByTypeAndNaturalKey = dao.getCataloguedEntityIdsByTypeAndNaturalKey();
         }
+        this.entityFactory = new EntityFactory(en_US, entityIdsByTypeAndNaturalKey);
+    }
+
+    void catalogMusic() throws IOException, NoSuchAlgorithmException {
 //        System.out.printf("Locale %s-%s has ID %s.%n", en_US.getLanguage(), en_US.getCountry(), en_US.getId());
         Mp3Folder rootMp3Folder = collectTrackInfoRecursively(srcDir, 0);
 //        printFolderSummary(rootMp3Folder);
@@ -111,13 +115,6 @@ class PrivateMusicCataloguer {
             printDbSummary();
             dao.close(true);
         }
-    }
-
-    private void mp3FoldersAddAllRecursive(Mp3Folder folder, List<Mp3Folder> mp3Folders) {
-        if (folder.getMp3s() != null && !folder.getMp3s().isEmpty()) {
-            mp3Folders.add(folder);
-        }
-        folder.getChildren().forEach(child -> mp3FoldersAddAllRecursive(child, mp3Folders));
     }
 
 //    private void printFolderSummary(Mp3Folder rootMp3Folder) {
@@ -182,9 +179,8 @@ class PrivateMusicCataloguer {
             folders.addAll(folder.getChildren());
             folder.getUniqueArtistNames().forEach(artistName -> {
                 if (!artists.containsKey(artistName)) {
-                    Artist artist = newArtistEntity(artistName);
-                    artist.setArt(Optional.ofNullable(folder.getArt()).orElse(defaultArt));
-                    artists.put(artistName, artist);
+                    artists.put(artistName, entityFactory.
+                            newArtistEntity(artistName, Optional.ofNullable(folder.getArt()).orElse(defaultArt)));
                 }
             });
         }
@@ -207,11 +203,10 @@ class PrivateMusicCataloguer {
             folder.getUniqueAlbumNames().forEach(albumKey -> {
                 ArrayList<String> keyAsList = new ArrayList<>(albumKey.toList());
                 if (!albums.containsKey(keyAsList)) {
-                    Album album = newAlbumEntity(albumKey.getAlbumName());
-                    album.setId(Optional.of(entityIdsByTypeAndNaturalKey.get(EntityType.ALBUM).get(keyAsList)).get());
-                    album.setArtists(asArrayList(artists.get(albumKey.getArtistName())));
-                    album.setArt(Optional.ofNullable(folder.getArt()).orElse(defaultArt));
-                    albums.put(keyAsList, album);
+                    albums.put(keyAsList, entityFactory.
+                            newAlbumEntity(albumKey.getAlbumName(),
+                                    artists.get(albumKey.getArtistName()),
+                                    Optional.ofNullable(folder.getArt()).orElse(defaultArt)));
                 }
             });
         }
@@ -232,17 +227,12 @@ class PrivateMusicCataloguer {
         while (!mp3Folders.isEmpty()) {
             Mp3Folder folder = mp3Folders.remove(0);
             mp3Folders.addAll(folder.getChildren());
-            folder.getMp3s().forEach(metadata -> {
-                Track track = mp3ToAlexaCatalog.mp3ToTrackEntity(metadata);
-                track.setArtists(asArrayList(artists.get(metadata.getAuthor())));
-                track.setAlbums(asArrayList(albums.get(asArrayList(metadata.getAuthor(), metadata.getAlbum()))));
-                track.setLocales(asArrayList(en_US));
-                track.setUrl(buildUrl(metadata.getFilePath()));
-                track.setArt(Optional.ofNullable(folder.getArt()).orElse(defaultArt));
-                track.setId(Optional.of(entityIdsByTypeAndNaturalKey.get(EntityType.TRACK)
-                        .get(Collections.singletonList(track.getUrl()))).get());
-                tracks.add(track);
-            });
+            folder.getMp3s()
+                    .forEach(metadata -> tracks.add(entityFactory.newTrackEntity(metadata,
+                            buildUrl(metadata.getFilePath()),
+                            artists.get(metadata.getAuthor()),
+                            albums.get(asArrayList(metadata.getAuthor(), metadata.getAlbum())),
+                            Optional.ofNullable(folder.getArt()).orElse(defaultArt))));
         }
         MusicRecordingCatalog trackCatalog = new MusicRecordingCatalog();
         trackCatalog.setEntities(tracks);
@@ -352,30 +342,6 @@ class PrivateMusicCataloguer {
         return String.format("%s/%s",
                 baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.lastIndexOf("/")) : baseUrl,
                 relativePathString.toString());
-    }
-
-    private Album newAlbumEntity(String albumName) {
-        Album retval = new Album();
-        retval.setLanguageOfContent(asArrayList("en"));
-        retval.setNames(asArrayList(new EntityName("en", albumName)));
-        retval.setPopularity(Popularity.unratedWithNoOverrides());
-        retval.setReleaseType("Studio Album");
-        retval.setLastUpdatedTime(Calendar.getInstance());
-        retval.setId(UUID.randomUUID().toString());
-        retval.setLocales(asArrayList(en_US));
-        return retval;
-    }
-
-    private Artist newArtistEntity(String artistName) {
-        Artist retval = new Artist();
-        retval.setNames(asArrayList(new EntityName("en", artistName)));
-        retval.setPopularity(Popularity.unratedWithNoOverrides());
-        retval.setLastUpdatedTime(Calendar.getInstance());
-        retval.setId(Optional.of(entityIdsByTypeAndNaturalKey.get(EntityType.ARTIST)
-                .get(Collections.singletonList(artistName))).get());
-//        retval.setId(UUID.randomUUID().toString());
-        retval.setLocales(asArrayList(en_US));
-        return retval;
     }
 
     private Art defaultArtObject(String baseUrl) throws IOException {
