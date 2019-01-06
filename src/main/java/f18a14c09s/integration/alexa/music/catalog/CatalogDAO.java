@@ -6,6 +6,7 @@ import f18a14c09s.integration.alexa.music.data.Art;
 import f18a14c09s.integration.alexa.music.entities.*;
 import f18a14c09s.integration.aws.AwsSecretsAdapter;
 import f18a14c09s.integration.hibernate.Hbm2DdlAuto;
+import org.hibernate.jpa.QueryHints;
 
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
@@ -158,5 +159,11 @@ public class CatalogDAO {
             retval.computeIfAbsent(entityType, k -> new HashMap<>()).put(key, entityId);
         });
         return retval;
+    }
+
+    public List<AbstractCatalog> findAllCatalogs() {
+        return entityManager.createQuery("SELECT o FROM AbstractCatalog o ORDER BY o.type, o.id", AbstractCatalog.class)
+                .setHint(QueryHints.HINT_FETCH_SIZE, 1000)
+                .getResultList();
     }
 }

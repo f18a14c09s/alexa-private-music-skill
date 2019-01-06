@@ -86,34 +86,35 @@ class PrivateMusicCataloguer {
         Mp3Folder rootMp3Folder = collectTrackInfoRecursively(srcDir, 0);
         printFolderSummary(rootMp3Folder);
         if (writeToDb) {
-            Map<String, String> artistIdToName = catalogArtists(rootMp3Folder).entrySet()
+            Map<String, Artist> artists = catalogArtists(rootMp3Folder);
+            Map<String, String> artistIdToName = artists.entrySet()
                     .stream()
                     .collect(Collectors.toMap(entry -> entry.getValue().getId(), Map.Entry::getKey));
-            Map<String, ArtistReference> artists = dao.findAllArtistReferences()
-                    .stream()
-                    .collect(Collectors.toMap(artist -> artistIdToName.get(artist.getId()), UnaryOperator.identity()));
-            Map<String, ArrayList<String>> albumIdToName = catalogAlbums(rootMp3Folder, artists).entrySet()
+            Map<String, ArtistReference> artistReferences = writeToDb ?
+                    dao.findAllArtistReferences()
+                            .stream()
+                            .collect(Collectors.toMap(artist -> artistIdToName.get(artist.getId()),
+                                    UnaryOperator.identity())) :
+                    artists.entrySet()
+                            .stream()
+                            .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().toReference()));
+            Map<ArrayList<String>, Album> albums = catalogAlbums(rootMp3Folder, artistReferences);
+            Map<String, ArrayList<String>> albumIdToName = albums.entrySet()
                     .stream()
                     .collect(Collectors.toMap(entry -> entry.getValue().getId(), Map.Entry::getKey));
-            Map<ArrayList<String>, AlbumReference> albums = dao.findAllAlbumReferences()
-                    .stream()
-                    .collect(Collectors.toMap(album -> albumIdToName.get(album.getId()),
-                            UnaryOperator.identity(),
-                            (lhs, rhs) -> {
-                                if (Objects.equals(lhs.getId(), rhs.getId()) ||
-                                        Objects.equals(albumIdToName.get(lhs.getId()),
-                                                albumIdToName.get(rhs.getId()))) {
-                                    System.out.printf("Duplicate:%n\tLHS: %s%n\t\t%s%n\tRHS: %s%n\t\t%s%n",
-                                            lhs,
-                                            albumIdToName.get(lhs.getId()),
-                                            rhs,
-                                            albumIdToName.get(rhs.getId()));
-                                }
-                                return lhs;
-                            }));
-            catalogTracks(rootMp3Folder, artists, albums);
-            printDbSummary();
-            dao.close(true);
+            Map<ArrayList<String>, AlbumReference> albumReferences = writeToDb ?
+                    dao.findAllAlbumReferences()
+                            .stream()
+                            .collect(Collectors.toMap(album -> albumIdToName.get(album.getId()),
+                                    UnaryOperator.identity())) :
+                    albums.entrySet()
+                            .stream()
+                            .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().toReference()));
+            catalogTracks(rootMp3Folder, artistReferences, albumReferences);
+            if (writeToDb) {
+                printDbSummary();
+                dao.close(true);
+            }
         }
     }
 
@@ -189,7 +190,9 @@ class PrivateMusicCataloguer {
         catalog.setLocales(asArrayList(en_US));
         writeToDisk(catalog,
                 new File(destDir, srcDir.getAbsolutePath().replaceAll("[^A-Za-z0-9-_\\.]+", ".") + "-artists.json"));
-        dao.save(catalog);
+        if (writeToDb) {
+            dao.save(catalog);
+        }
         return artists;
     }
 
@@ -215,7 +218,9 @@ class PrivateMusicCataloguer {
         catalog.setLocales(asArrayList(en_US));
         writeToDisk(catalog,
                 new File(destDir, srcDir.getAbsolutePath().replaceAll("[^A-Za-z0-9-_\\.]+", ".") + "-albums.json"));
-        dao.save(catalog);
+        if (writeToDb) {
+            dao.save(catalog);
+        }
         return albums;
     }
 
@@ -239,7 +244,9 @@ class PrivateMusicCataloguer {
         trackCatalog.setLocales(asArrayList(en_US));
         writeToDisk(trackCatalog,
                 new File(destDir, srcDir.getAbsolutePath().replaceAll("[^A-Za-z0-9-_\\.]+", ".") + "-tracks.json"));
-        dao.save(trackCatalog);
+        if (writeToDb) {
+            dao.save(trackCatalog);
+        }
     }
 
     private Mp3Folder collectTrackInfoRecursively(File dir, int level) throws IOException, NoSuchAlgorithmException {
