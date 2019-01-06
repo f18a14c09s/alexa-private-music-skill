@@ -63,19 +63,20 @@ class PrivateMusicCataloguer {
         this.reset = reset;
         this.writeToDisk = (destDir != null);
         this.writeToDb = writeToDb;
-        this.defaultArt = defaultArtObject(imageBaseUrl);
-        this.en_US = Locale.en_US();
         this.mp3Adapter = new Mp3Adapter();
         this.jsonAdapter = new JSONAdapter();
         this.sha256Digester = MessageDigest.getInstance("SHA-256");
         this.base64Encoder = Base64.getEncoder();
+        //
+        this.defaultArt = defaultArtObject(imageBaseUrl);
+        this.en_US = Locale.en_US();
         Map<EntityType, Map<List<String>, String>> entityIdsByTypeAndNaturalKey = null;
         if (writeToDb) {
             this.dao = new CatalogDAO(Hbm2DdlAuto.create);
             dao.save(en_US);
             dao.save(defaultArt);
             dao.commit();
-            en_US = dao.findLocale(en_US.getCountry().name(), en_US.getLanguage().name());
+            en_US = dao.findLocale(en_US.getCountry(), en_US.getLanguage());
             entityIdsByTypeAndNaturalKey = dao.getCataloguedEntityIdsByTypeAndNaturalKey();
         }
         this.entityFactory = new EntityFactory(en_US, entityIdsByTypeAndNaturalKey);

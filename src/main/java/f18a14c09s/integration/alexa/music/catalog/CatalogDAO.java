@@ -1,5 +1,7 @@
 package f18a14c09s.integration.alexa.music.catalog;
 
+import f18a14c09s.integration.alexa.data.Country;
+import f18a14c09s.integration.alexa.data.Language;
 import f18a14c09s.integration.alexa.data.Locale;
 import f18a14c09s.integration.alexa.music.catalog.data.AbstractCatalog;
 import f18a14c09s.integration.alexa.music.data.Art;
@@ -110,7 +112,7 @@ public class CatalogDAO {
         return entityManager.createQuery(criteria.select(cb.count(root))).getSingleResult();
     }
 
-    public Locale findLocale(String country, String language) {
+    public Locale findLocale(Country country, Language language) {
         return entityManager.createQuery("SELECT o FROM Locale o WHERE o.country = :country AND o.language = :language",
                 Locale.class).setParameter("country", country).setParameter("language", language).getSingleResult();
     }
