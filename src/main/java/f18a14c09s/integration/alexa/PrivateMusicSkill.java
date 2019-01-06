@@ -6,10 +6,10 @@ import com.amazon.ask.response.SkillResponse;
 import com.amazon.ask.response.impl.BaseSkillResponse;
 import com.amazon.ask.util.impl.JacksonJsonMarshaller;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import f18a14c09s.integration.alexa.data.AbstractMessage;
 import f18a14c09s.integration.alexa.data.BaseMessage;
 import f18a14c09s.integration.alexa.music.data.RequestType;
-import f18a14c09s.integration.alexa.music.messagetypes.Request;
-import f18a14c09s.integration.alexa.music.messagetypes.Response;
+import f18a14c09s.integration.alexa.music.messagetypes.*;
 import f18a14c09s.integration.json.JSONAdapter;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -25,10 +25,17 @@ public class PrivateMusicSkill implements AlexaSkill<Request, Response> {
             skillsByRequestType;
 
     static {
-        Map<RequestType, AbstractMusicSkill<? extends Request<?>, ? extends Response<?>>> tempMap =
-                new HashMap<>();
-        tempMap.put(new RequestType("Alexa.Media.Search", "GetPlayableContent"), new GetPlayableContentSkill());
-        tempMap.put(new RequestType("Alexa.Media.Playback", "Initiate"), new InitiationSkill());
+        Map<RequestType, AbstractMusicSkill<? extends Request<?>, ? extends Response<?>>> tempMap = new HashMap<>();
+        tempMap.put(new RequestType(AlexaMediaSearch.NAMESPACE_NAME, AlexaMediaSearch.GET_PLAYABLE_CONTENT.getMyName()),
+                new GetPlayableContentSkill());
+        tempMap.put(new RequestType(AlexaMediaPlayback.NAMESPACE_NAME, AlexaMediaPlayback.INITIATE.getMyName()),
+                new InitiationSkill());
+        tempMap.put(new RequestType(AlexaMediaPlayQueue.NAMESPACE_NAME, AlexaMediaPlayQueue.GET_ITEM.getMyName()),
+                new GetItemSkill());
+        tempMap.put(new RequestType(AlexaAudioPlayQueue.NAMESPACE_NAME,
+                AlexaAudioPlayQueue.GET_PREVIOUS_ITEM.getMyName()), new GetPreviousItemSkill());
+        tempMap.put(new RequestType(AlexaAudioPlayQueue.NAMESPACE_NAME, AlexaAudioPlayQueue.GET_NEXT_ITEM.getMyName()),
+                new GetNextItemSkill());
         skillsByRequestType = tempMap;
     }
 
@@ -42,22 +49,25 @@ public class PrivateMusicSkill implements AlexaSkill<Request, Response> {
             return null;
         }
         request.ifPresent(this::debug);
-        return request.map(BaseMessage::getHeader)
+        SkillResponse<Response> retval = request.map(BaseMessage::getHeader)
                 .map(messageHeader -> new RequestType(messageHeader.getNamespace(), messageHeader.getName()))
                 .map(skillsByRequestType::get)
                 .map(skill -> skill.invoke(request.get(), context))
                 .map(response -> new BaseSkillResponse(new JacksonJsonMarshaller(), response))
                 .orElse(null);
+        this.debug(retval.getResponse());
+        return retval;
     }
 
-    private void debug(Request request) {
-        String messageId = request.getHeader().getMessageId();
+    private void debug(AbstractMessage<?> message) {
+        String messageId = message.getHeader().getMessageId();
         try {
-            logger.debug(String.format("Processing request %s:%n%s",
+            logger.debug(String.format("%s message %s:%n%s",
+                    message.getHeader().getName(),
                     messageId,
-                    jsonAdapter.writeValueAsString(request)));
+                    jsonAdapter.writeValueAsString(message)));
         } catch (JsonProcessingException e) {
-            logger.warn(String.format("Failed to print request %s.", messageId), e);
+            logger.warn(String.format("Failed to print message %s.", messageId), e);
         }
     }
 }
