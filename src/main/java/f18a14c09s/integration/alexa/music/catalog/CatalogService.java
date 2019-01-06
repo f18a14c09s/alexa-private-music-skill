@@ -63,6 +63,9 @@ public class CatalogService {
             return findArtistNextTrack(contentId, currentTrackId);
         } else if (entity instanceof Album) {
             return findAlbumNextTrack(contentId, currentTrackId);
+        } else if (entity instanceof Track) {
+            // Assumption is that null will be handled appropriately (e.g. the response will be "end-of-queue.").
+            return null;
         } else {
             throw new UnsupportedOperationException(String.format(
                     "Not sure how to get the next track for entity %s of type: %s.",
