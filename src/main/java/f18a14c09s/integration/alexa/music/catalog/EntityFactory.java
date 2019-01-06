@@ -7,6 +7,8 @@ import f18a14c09s.integration.mp3.TrackMetadata;
 
 import java.util.*;
 
+import static f18a14c09s.integration.alexa.data.Language.en;
+import static f18a14c09s.integration.alexa.music.entities.ReleaseType.StudioAlbum;
 import static f18a14c09s.util.CollectionUtil.asArrayList;
 
 public class EntityFactory {
@@ -20,7 +22,7 @@ public class EntityFactory {
 
     public Artist newArtistEntity(String artistName, Art art) {
         Artist retval = new Artist();
-        retval.setNames(asArrayList(new EntityName("en", artistName)));
+        retval.setNames(asArrayList(new EntityName(en, artistName)));
         retval.setPopularity(Popularity.unratedWithNoOverrides());
         retval.setLastUpdatedTime(Calendar.getInstance());
         retval.setId(Optional.of(entityIdsByTypeAndNaturalKey.get(EntityType.ARTIST)
@@ -39,10 +41,10 @@ public class EntityFactory {
                 .map(EntityName::getValue)
                 .orElse(null);
         Album retval = new Album();
-        retval.setLanguageOfContent(asArrayList("en"));
-        retval.setNames(asArrayList(new EntityName("en", albumName)));
+        retval.setLanguageOfContent(asArrayList(en));
+        retval.setNames(asArrayList(new EntityName(en, albumName)));
         retval.setPopularity(Popularity.unratedWithNoOverrides());
-        retval.setReleaseType("Studio Album");
+        retval.setReleaseType(StudioAlbum.getTitle());
         retval.setLastUpdatedTime(Calendar.getInstance());
         retval.setId(Optional.ofNullable(entityIdsByTypeAndNaturalKey.get(EntityType.ALBUM)
                 .get(asArrayList(artistName, albumName))).orElseGet(() -> UUID.randomUUID().toString()));
@@ -54,12 +56,12 @@ public class EntityFactory {
 
     public Track newTrackEntity(TrackMetadata mp3, String url, ArtistReference artist, AlbumReference album, Art art) {
         Track retval = new Track();
-        retval.setLanguageOfContent(asArrayList("en"));
-        retval.setNames(asArrayList(new EntityName("en", mp3.getTitle())));
+        retval.setLanguageOfContent(asArrayList(en));
+        retval.setNames(asArrayList(new EntityName(en, mp3.getTitle())));
         retval.setDurationSeconds(mp3.getDurationSeconds());
         retval.setNaturalOrder(mp3.getTrackNumber());
         retval.setPopularity(Popularity.unratedWithNoOverrides());
-        retval.setReleaseType("Studio Album");
+//        retval.setReleaseType(StudioAlbum.getTitle());
         retval.setLastUpdatedTime(Calendar.getInstance());
         retval.setArtists(asArrayList(artist));
         retval.setAlbums(asArrayList(album));

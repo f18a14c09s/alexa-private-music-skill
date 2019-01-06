@@ -75,7 +75,7 @@ class PrivateMusicCataloguer {
             dao.save(en_US);
             dao.save(defaultArt);
             dao.commit();
-            en_US = dao.findLocale(en_US.getCountry(), en_US.getLanguage());
+            en_US = dao.findLocale(en_US.getCountry().name(), en_US.getLanguage().name());
             entityIdsByTypeAndNaturalKey = dao.getCataloguedEntityIdsByTypeAndNaturalKey();
         }
         this.entityFactory = new EntityFactory(en_US, entityIdsByTypeAndNaturalKey);
@@ -84,7 +84,7 @@ class PrivateMusicCataloguer {
     void catalogMusic() throws IOException, NoSuchAlgorithmException {
 //        System.out.printf("Locale %s-%s has ID %s.%n", en_US.getLanguage(), en_US.getCountry(), en_US.getId());
         Mp3Folder rootMp3Folder = collectTrackInfoRecursively(srcDir, 0);
-//        printFolderSummary(rootMp3Folder);
+        printFolderSummary(rootMp3Folder);
         if (writeToDb) {
             Map<String, String> artistIdToName = catalogArtists(rootMp3Folder).entrySet()
                     .stream()
@@ -117,39 +117,39 @@ class PrivateMusicCataloguer {
         }
     }
 
-//    private void printFolderSummary(Mp3Folder rootMp3Folder) {
-//        System.out.printf(
-//                "Root Folder:%n\tHas Mp3s: %s" + "%n\tLikely Artist Folders: %s%n\tNot Likely Artist Folders: %s" +
-//                        "%n\tLikely Album Folders: %s%n\tNot Likely Album Folders: %s" +
-//                        "%n\tNon-Unique Artist Names:%s%n" + "%n\tNon-Unique Album Names:%s%n",
-//                !rootMp3Folder.getMp3s().isEmpty(),
-//                rootMp3Folder.getChildren().stream().filter(Mp3Folder::isLikelyArtistFolder).count(),
-//                rootMp3Folder.getChildren()
-//                        .stream()
-//                        .filter(((Predicate<Mp3Folder>) Mp3Folder::isLikelyArtistFolder).negate())
-//                        .count(),
-//                rootMp3Folder.getChildren().stream().filter(Mp3Folder::isLikelyAlbumFolder).count(),
-//                rootMp3Folder.getChildren()
-//                        .stream()
-//                        .filter(((Predicate<Mp3Folder>) Mp3Folder::isLikelyAlbumFolder).negate())
-//                        .count(),
-//                rootMp3Folder.getChildren()
-//                        .stream()
-//                        .filter(child -> child.isLikelyArtistFolder() && child.getUniqueArtistNames().size() != 1)
-//                        .map(child -> String.format("%n\t\tNon-Unique Names (%s total): %s",
-//                                child.getUniqueArtistNames().size(),
-//                                child.getUniqueArtistNames()))
-//                        .collect(Collectors.joining()),
-//                rootMp3Folder.getChildren()
-//                        .stream()
-//                        .flatMap(child -> Stream.concat(Stream.of(child),
-//                                child.getChildren() == null ? Stream.empty() : child.getChildren().stream()))
-//                        .filter(child -> child.isLikelyAlbumFolder() && child.getUniqueAlbumNames().size() != 1)
-//                        .map(child -> String.format("%n\t\tNon-Unique Names (%s total): %s",
-//                                child.getUniqueAlbumNames().size(),
-//                                child.getUniqueAlbumNames()))
-//                        .collect(Collectors.joining()));
-//    }
+    private void printFolderSummary(Mp3Folder rootMp3Folder) {
+        System.out.printf(
+                "Root Folder:%n\tHas Mp3s: %s" + "%n\tLikely Artist Folders: %s%n\tNot Likely Artist Folders: %s" +
+                        "%n\tLikely Album Folders: %s%n\tNot Likely Album Folders: %s" +
+                        "%n\tNon-Unique Artist Names:%s%n" + "%n\tNon-Unique Album Names:%s%n",
+                !rootMp3Folder.getMp3s().isEmpty(),
+                rootMp3Folder.getChildren().stream().filter(Mp3Folder::isLikelyArtistFolder).count(),
+                rootMp3Folder.getChildren()
+                        .stream()
+                        .filter(((Predicate<Mp3Folder>) Mp3Folder::isLikelyArtistFolder).negate())
+                        .count(),
+                rootMp3Folder.getChildren().stream().filter(Mp3Folder::isLikelyAlbumFolder).count(),
+                rootMp3Folder.getChildren()
+                        .stream()
+                        .filter(((Predicate<Mp3Folder>) Mp3Folder::isLikelyAlbumFolder).negate())
+                        .count(),
+                rootMp3Folder.getChildren()
+                        .stream()
+                        .filter(child -> child.isLikelyArtistFolder() && child.getUniqueArtistNames().size() != 1)
+                        .map(child -> String.format("%n\t\tNon-Unique Names (%s total): %s",
+                                child.getUniqueArtistNames().size(),
+                                child.getUniqueArtistNames()))
+                        .collect(Collectors.joining()),
+                rootMp3Folder.getChildren()
+                        .stream()
+                        .flatMap(child -> Stream.concat(Stream.of(child),
+                                child.getChildren() == null ? Stream.empty() : child.getChildren().stream()))
+                        .filter(child -> child.isLikelyAlbumFolder() && child.getUniqueAlbumNames().size() != 1)
+                        .map(child -> String.format("%n\t\tNon-Unique Names (%s total): %s",
+                                child.getUniqueAlbumNames().size(),
+                                child.getUniqueAlbumNames()))
+                        .collect(Collectors.joining()));
+    }
 
     private void printDbSummary() {
         for (Class<?> clazz : asArrayList(Locale.class,
@@ -272,6 +272,7 @@ class PrivateMusicCataloguer {
                         track.setFilePath(relativePath);
                         track.setAuthor(Optional.ofNullable(track.getAuthor()).orElse("Unknown"));
                         track.setAlbum(Optional.ofNullable(track.getAlbum()).orElse("Unknown"));
+                        track.setTitle(Optional.ofNullable(track.getTitle()).orElse("Unknown"));
                         return track;
                     } catch (IOException | InvalidAudioFrameException | TagException | ReadOnlyFileException e) {
                         throw new RuntimeException(String.format("Failure parsing %s.", mp3.getAbsolutePath()), e);
