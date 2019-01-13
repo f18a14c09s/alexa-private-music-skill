@@ -31,7 +31,11 @@ public class PrivateMusicCataloguerCLI {
         String baseUrl = null;
         String imageBaseUrl = null;
         boolean reset = args.containsKey(ARG_NAME_RESET);
-        boolean writeToDb = args.containsKey(ARG_NAME_WRITE_TO_DB);
+        boolean writeToDb = Optional.ofNullable(args.get(ARG_NAME_WRITE_TO_DB))
+                .map(List::iterator)
+                .map(Iterator::next)
+                .map(Boolean.class::cast)
+                .orElse(false);
         if (args.containsKey(ARG_NAME_SRC_DIR)) {
             src = new File((String) args.get(ARG_NAME_SRC_DIR).get(0));
         } else {
@@ -87,7 +91,7 @@ public class PrivateMusicCataloguerCLI {
         retval.put(ARG_NAME_BASE_URL, Collections.unmodifiableList(Arrays.asList(UnaryOperator.identity())));
         retval.put(ARG_NAME_IMAGE_BASE_URL, Collections.unmodifiableList(Arrays.asList(UnaryOperator.identity())));
         retval.put(ARG_NAME_RESET, null);
-        retval.put(ARG_NAME_WRITE_TO_DB, null);
+        retval.put(ARG_NAME_WRITE_TO_DB, Collections.unmodifiableList(Arrays.asList(Boolean::parseBoolean)));
         return Collections.unmodifiableMap(retval);
     }
 

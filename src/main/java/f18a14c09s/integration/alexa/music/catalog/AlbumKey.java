@@ -10,7 +10,7 @@ import static f18a14c09s.util.CollectionUtil.asArrayList;
 
 @Getter
 @Setter(AccessLevel.PRIVATE)
-public class AlbumKey {
+public class AlbumKey implements Comparable<AlbumKey> {
     private String artistName;
     private String albumName;
 
@@ -39,5 +39,10 @@ public class AlbumKey {
 
     public List<String> toList() {
         return asArrayList(getArtistName(), getAlbumName());
+    }
+
+    @Override
+    public int compareTo(AlbumKey rhs) {
+        return Comparator.comparing(AlbumKey::getArtistName).thenComparing(AlbumKey::getAlbumName).compare(this, rhs);
     }
 }

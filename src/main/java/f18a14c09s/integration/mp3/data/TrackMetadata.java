@@ -1,4 +1,4 @@
-package f18a14c09s.integration.mp3;
+package f18a14c09s.integration.mp3.data;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -12,7 +12,7 @@ public class TrackMetadata {
     private String title;
     private String author;
     private String album;
-    private String year;
+    private Long year;
     private String copyright;
     private String comment;
     private Path filePath;
@@ -26,7 +26,7 @@ public class TrackMetadata {
                          String author,
                          String album,
                          Long durationSeconds,
-                         String year,
+                         Long year,
                          String copyright,
                          String comment,
                          Long trackNumber,

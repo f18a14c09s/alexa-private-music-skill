@@ -11,10 +11,10 @@ import f18a14c09s.integration.alexa.music.data.ArtSourceSize;
 import f18a14c09s.integration.alexa.music.entities.*;
 import f18a14c09s.integration.hibernate.Hbm2DdlAuto;
 import f18a14c09s.integration.json.JSONAdapter;
-import f18a14c09s.integration.mp3.ImageMetadata;
 import f18a14c09s.integration.mp3.Mp3Adapter;
-import f18a14c09s.integration.mp3.Mp3Folder;
-import f18a14c09s.integration.mp3.TrackMetadata;
+import f18a14c09s.integration.mp3.data.ImageMetadata;
+import f18a14c09s.integration.mp3.data.Mp3Folder;
+import f18a14c09s.integration.mp3.data.TrackMetadata;
 import org.jaudiotagger.audio.exceptions.InvalidAudioFrameException;
 import org.jaudiotagger.audio.exceptions.ReadOnlyFileException;
 import org.jaudiotagger.tag.TagException;
@@ -76,6 +76,7 @@ class PrivateMusicCataloguer {
             dao.save(en_US);
             dao.save(defaultArt);
             dao.commit();
+            // TODO: Not sure that this is necessary:
             en_US = dao.findLocale(en_US.getCountry(), en_US.getLanguage());
             entityIdsByTypeAndNaturalKey = dao.getCataloguedEntityIdsByTypeAndNaturalKey();
         }
@@ -86,44 +87,51 @@ class PrivateMusicCataloguer {
 //        System.out.printf("Locale %s-%s has ID %s.%n", en_US.getLanguage(), en_US.getCountry(), en_US.getId());
         Mp3Folder rootMp3Folder = collectTrackInfoRecursively(srcDir, 0);
         printFolderSummary(rootMp3Folder);
+        Map<String, Artist> artists = catalogArtists(rootMp3Folder);
+        Map<String, String> artistIdToName = artists.entrySet()
+                .stream()
+                .collect(Collectors.toMap(entry -> entry.getValue().getId(), Map.Entry::getKey));
+        Map<String, ArtistReference> artistReferences = writeToDb ?
+                dao.findAllArtistReferences()
+                        .stream()
+                        .collect(Collectors.toMap(artist -> artistIdToName.get(artist.getId()),
+                                UnaryOperator.identity())) :
+                artists.entrySet()
+                        .stream()
+                        .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().toReference()));
+        Map<ArrayList<String>, Album> albums = catalogAlbums(rootMp3Folder, artistReferences);
+        Map<String, ArrayList<String>> albumIdToName = albums.entrySet()
+                .stream()
+                .collect(Collectors.toMap(entry -> entry.getValue().getId(), Map.Entry::getKey));
+        Map<ArrayList<String>, AlbumReference> albumReferences = writeToDb ?
+                dao.findAllAlbumReferences()
+                        .stream()
+                        .collect(Collectors.toMap(album -> albumIdToName.get(album.getId()),
+                                UnaryOperator.identity())) :
+                albums.entrySet()
+                        .stream()
+                        .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().toReference()));
+        catalogTracks(rootMp3Folder, artistReferences, albumReferences);
         if (writeToDb) {
-            Map<String, Artist> artists = catalogArtists(rootMp3Folder);
-            Map<String, String> artistIdToName = artists.entrySet()
-                    .stream()
-                    .collect(Collectors.toMap(entry -> entry.getValue().getId(), Map.Entry::getKey));
-            Map<String, ArtistReference> artistReferences = writeToDb ?
-                    dao.findAllArtistReferences()
-                            .stream()
-                            .collect(Collectors.toMap(artist -> artistIdToName.get(artist.getId()),
-                                    UnaryOperator.identity())) :
-                    artists.entrySet()
-                            .stream()
-                            .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().toReference()));
-            Map<ArrayList<String>, Album> albums = catalogAlbums(rootMp3Folder, artistReferences);
-            Map<String, ArrayList<String>> albumIdToName = albums.entrySet()
-                    .stream()
-                    .collect(Collectors.toMap(entry -> entry.getValue().getId(), Map.Entry::getKey));
-            Map<ArrayList<String>, AlbumReference> albumReferences = writeToDb ?
-                    dao.findAllAlbumReferences()
-                            .stream()
-                            .collect(Collectors.toMap(album -> albumIdToName.get(album.getId()),
-                                    UnaryOperator.identity())) :
-                    albums.entrySet()
-                            .stream()
-                            .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().toReference()));
-            catalogTracks(rootMp3Folder, artistReferences, albumReferences);
-            if (writeToDb) {
-                printDbSummary();
-                dao.close(true);
-            }
+            printDbSummary();
+            dao.close(true);
         }
     }
 
     private void printFolderSummary(Mp3Folder rootMp3Folder) {
+        List<Mp3Folder> mp3Containers = new ArrayList<>();
+        for (List<Mp3Folder> temp = asArrayList(rootMp3Folder); !temp.isEmpty(); ) {
+            Mp3Folder folder = temp.remove(0);
+            if (!folder.getMp3s().isEmpty()) {
+                mp3Containers.add(folder);
+            }
+            temp.addAll(folder.getChildren());
+        }
         System.out.printf(
-                "Root Folder:%n\tHas Mp3s: %s" + "%n\tLikely Artist Folders: %s%n\tNot Likely Artist Folders: %s" +
-                        "%n\tLikely Album Folders: %s%n\tNot Likely Album Folders: %s" +
-                        "%n\tNon-Unique Artist Names:%s%n" + "%n\tNon-Unique Album Names:%s%n",
+                "Root Folder:%n\tHas Mp3s: %s" + "%n\tLikely Artist Folders: %s" + "%n\tNot Likely Artist Folders: %s" +
+                        "%n\tLikely Album Folders: %s" + "%n\tNot Likely Album Folders: %s" +
+                        "%n\tOut of %s MP3-containing Folders:%n\t\tNon-Unique Artist Names:%s" +
+                        "%n\t\tNon-Unique Album Names:%s" + "%n\t\tNon-Unique Years:%s%n",
                 !rootMp3Folder.getMp3s().isEmpty(),
                 rootMp3Folder.getChildren().stream().filter(Mp3Folder::isLikelyArtistFolder).count(),
                 rootMp3Folder.getChildren()
@@ -135,21 +143,43 @@ class PrivateMusicCataloguer {
                         .stream()
                         .filter(((Predicate<Mp3Folder>) Mp3Folder::isLikelyAlbumFolder).negate())
                         .count(),
-                rootMp3Folder.getChildren()
-                        .stream()
-                        .filter(child -> child.isLikelyArtistFolder() && child.getUniqueArtistNames().size() != 1)
-                        .map(child -> String.format("%n\t\tNon-Unique Names (%s total): %s",
+                mp3Containers.size(),
+                mp3Containers.stream()
+                        .filter(child -> child.getUniqueArtistNames().size() != 1)
+                        .map(child -> String.format("%n\t\t\t%s has (%s total): %s",
+                                child.getRelativePath(),
                                 child.getUniqueArtistNames().size(),
-                                child.getUniqueArtistNames()))
+                                child.getUniqueArtistNames()
+                                        .stream()
+                                        .sorted()
+                                        .map(name -> String.format("%n\t\t\t\t%s", name))
+                                        .collect(Collectors.joining())))
                         .collect(Collectors.joining()),
-                rootMp3Folder.getChildren()
-                        .stream()
+                mp3Containers.stream()
                         .flatMap(child -> Stream.concat(Stream.of(child),
                                 child.getChildren() == null ? Stream.empty() : child.getChildren().stream()))
                         .filter(child -> child.isLikelyAlbumFolder() && child.getUniqueAlbumNames().size() != 1)
-                        .map(child -> String.format("%n\t\tNon-Unique Names (%s total): %s",
+                        .map(child -> String.format("%n\t\t\t%s has (%s total): %s",
+                                child.getRelativePath(),
                                 child.getUniqueAlbumNames().size(),
-                                child.getUniqueAlbumNames()))
+                                child.getUniqueAlbumNames()
+                                        .stream()
+                                        .sorted()
+                                        .map(name -> String.format("%n\t\t\t\t%s", name))
+                                        .collect(Collectors.joining())))
+                        .collect(Collectors.joining()),
+                mp3Containers.stream()
+                        .flatMap(child -> Stream.concat(Stream.of(child),
+                                child.getChildren() == null ? Stream.empty() : child.getChildren().stream()))
+                        .filter(child -> child.isLikelyAlbumFolder() && child.getUniqueReleaseYears().size() != 1)
+                        .map(child -> String.format("%n\t\t\t%s has (%s total): %s",
+                                child.getRelativePath(),
+                                child.getUniqueReleaseYears().size(),
+                                child.getUniqueReleaseYears()
+                                        .stream()
+                                        .sorted()
+                                        .map(year -> String.format("%n\t\t\t\t%s", year))
+                                        .collect(Collectors.joining())))
                         .collect(Collectors.joining()));
     }
 
@@ -210,7 +240,12 @@ class PrivateMusicCataloguer {
                     albums.put(keyAsList, entityFactory.
                             newAlbumEntity(albumKey.getAlbumName(),
                                     artists.get(albumKey.getArtistName()),
-                                    Optional.ofNullable(folder.getArt()).orElse(defaultArt)));
+                                    Optional.ofNullable(folder.getArt()).orElse(defaultArt),
+                                    folder.getUniqueReleaseYears()
+                                            .stream()
+                                            .filter(Objects::nonNull)
+                                            .min(Comparator.naturalOrder())
+                                            .orElse(null)));
                 }
             });
         }
@@ -258,7 +293,11 @@ class PrivateMusicCataloguer {
         for (File subdir : subdirs) {
             children.add(collectTrackInfoRecursively(subdir, level + 1));
         }
-        return new Mp3Folder(collectTrackMetadata(dir), collectAlbumArt(dir), level, children);
+        return new Mp3Folder(collectTrackMetadata(dir),
+                collectAlbumArt(dir),
+                level,
+                children,
+                srcDir.toPath().relativize(dir.toPath()).toString());
     }
 
     private List<TrackMetadata> collectTrackMetadata(File dir) {

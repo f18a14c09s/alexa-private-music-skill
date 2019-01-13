@@ -1,5 +1,7 @@
 package f18a14c09s.integration.mp3;
 
+import f18a14c09s.integration.mp3.data.TrackMetadata;
+import f18a14c09s.integration.util.DateUtil;
 import org.jaudiotagger.audio.exceptions.InvalidAudioFrameException;
 import org.jaudiotagger.audio.exceptions.ReadOnlyFileException;
 import org.jaudiotagger.audio.mp3.MP3AudioHeader;
@@ -9,26 +11,21 @@ import org.jaudiotagger.tag.TagException;
 import org.jaudiotagger.tag.id3.AbstractID3v2Tag;
 import org.jaudiotagger.tag.id3.ID3v1Tag;
 
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
+import java.text.ParseException;
 import java.util.*;
 import java.util.function.*;
+import java.util.logging.*;
 
 public class Mp3Adapter {
-    public TrackMetadata parseMetadata(InputStream mp3Stream) throws
-            IOException,
-            InvalidAudioFrameException,
-            TagException,
-            ReadOnlyFileException {
-        File tempFile = File.createTempFile("track_", ".mp3");
-        try (BufferedInputStream bis = new BufferedInputStream(mp3Stream);
-             FileOutputStream fos = new FileOutputStream(tempFile)) {
-            for (int b = bis.read(); b >= 0; b = bis.read()) {
-                fos.write(b);
-            }
-            fos.flush();
-        }
-        tempFile.deleteOnExit();
-        return parseMetadata(tempFile);
+
+    private Logger logger = Logger.getLogger(getClass().getName());
+
+    static {
+        // For some reason, JAudioTagger prints a lot of INFO and WARNING messages; so the following attempts to reduce
+        // the number:
+        Logger.getLogger("org.jaudiotagger").setLevel(Level.SEVERE);
     }
 
     public TrackMetadata parseMetadata(File file) throws
@@ -47,7 +44,22 @@ public class Mp3Adapter {
                 Optional.ofNullable(getField.apply(FieldKey.ARTIST)).orElse(getField.apply(FieldKey.ALBUM_ARTIST)),
                 getField.apply(FieldKey.ALBUM),
                 mp3AudioHeader.map(MP3AudioHeader::getTrackLength).map(Integer::longValue).orElse(null),
-                getField.apply(FieldKey.YEAR),
+                Optional.ofNullable(getField.apply(FieldKey.YEAR)).map(yearString -> {
+                    if (!yearString.matches("^[0-9]+$")) {
+                        try {
+                            Date date = DateUtil.parseAsIso8601UtcSeconds(yearString);
+                            Calendar cal = Calendar.getInstance();
+                            cal.setTime(date);
+                            return Integer.toString(cal.get(Calendar.YEAR));
+                        } catch (ParseException e) {
+                            logger.warning(String.format("File %s contains invalid \"year\" string: %s.",
+                                    file.getAbsolutePath(),
+                                    yearString));
+                        }
+                        return null;
+                    }
+                    return yearString;
+                }).map(Long::parseLong).orElse(null),
                 null,
                 getField.apply(FieldKey.COMMENT),
                 Optional.ofNullable(getField.apply(FieldKey.TRACK)).map(Long::parseLong).orElse(null),
@@ -57,4 +69,5 @@ public class Mp3Adapter {
     private static boolean notEmpty(String s) {
         return s != null && !s.trim().isEmpty() && !s.equals("null");
     }
+
 }

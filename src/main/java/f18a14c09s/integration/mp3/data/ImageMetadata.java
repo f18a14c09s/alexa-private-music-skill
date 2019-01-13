@@ -1,4 +1,4 @@
-package f18a14c09s.integration.mp3;
+package f18a14c09s.integration.mp3.data;
 
 import f18a14c09s.integration.alexa.music.data.ArtSourceSize;
 import lombok.Getter;
