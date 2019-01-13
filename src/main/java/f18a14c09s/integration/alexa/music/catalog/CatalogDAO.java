@@ -23,39 +23,46 @@ import java.util.*;
 public class CatalogDAO {
     private EntityManagerFactory entityManagerFactory;
     private EntityManager entityManager;
-    private AwsSecretsAdapter awsSecrets;
 
     public CatalogDAO() throws IOException {
-        this(null);
+        this((Hbm2DdlAuto) null);
     }
 
     public CatalogDAO(Hbm2DdlAuto hbm2DdlAuto) throws IOException {
-        awsSecrets = new AwsSecretsAdapter();
+        this(defaultEntityManagerFactory(hbm2DdlAuto, new AwsSecretsAdapter()));
+    }
+
+    CatalogDAO(EntityManagerFactory entityManagerFactory) {
+        this.entityManagerFactory = entityManagerFactory;
+        this.entityManager = entityManagerFactory.createEntityManager();
+    }
+
+     static EntityManagerFactory defaultEntityManagerFactory(Hbm2DdlAuto hbm2DdlAuto,
+                                                                    AwsSecretsAdapter awsSecrets) throws IOException {
         Map<String, Object> properties = new HashMap<>();
-        Map<String, String> xref = new HashMap<>();
-        Map<String, Object> secret = null;
         Optional.ofNullable(hbm2DdlAuto)
                 .map(Hbm2DdlAuto::value)
                 .ifPresent(value -> properties.put("hibernate.hbm2ddl.auto", hbm2DdlAuto.value()));
-        xref.put("javax.persistence.jdbc.driver", "databaseDriver");
-        xref.put("javax.persistence.jdbc.url", "databaseUrl");
-        xref.put("javax.persistence.jdbc.user", "databaseUserId");
-        xref.put("javax.persistence.jdbc.password", "databasePassword");
-        xref.put("hibernate.dialect", "hibernateDatabaseDialect");
-        for (Map.Entry<String, String> kvp : xref.entrySet()) {
-            Optional<String> value = Optional.ofNullable(System.getenv(kvp.getValue()));
-            if (!value.isPresent()) {
-                if (secret == null) {
-                    secret = awsSecrets.getSecret("alexa-private-music-skill");
+        if (awsSecrets != null) {
+            Map<String, Object> secret = null;
+            Map<String, String> xref = new HashMap<>();
+            xref.put("javax.persistence.jdbc.driver", "databaseDriver");
+            xref.put("javax.persistence.jdbc.url", "databaseUrl");
+            xref.put("javax.persistence.jdbc.user", "databaseUserId");
+            xref.put("javax.persistence.jdbc.password", "databasePassword");
+            xref.put("hibernate.dialect", "hibernateDatabaseDialect");
+            for (Map.Entry<String, String> kvp : xref.entrySet()) {
+                Optional<String> optionalValue = Optional.ofNullable(System.getenv(kvp.getValue()));
+                if (!optionalValue.isPresent()) {
+                    if (secret == null) {
+                        secret = awsSecrets.getSecret("alexa-private-music-skill");
+                    }
+                    optionalValue = Optional.ofNullable((String) secret.get(kvp.getValue()));
                 }
-                value = Optional.ofNullable((String) secret.get(kvp.getValue()));
-            }
-            if (value.isPresent()) {
-                properties.put(kvp.getKey(), value.get());
+                optionalValue.ifPresent(value -> properties.put(kvp.getKey(), value));
             }
         }
-        entityManagerFactory = Persistence.createEntityManagerFactory("alexa-music-data", properties);
-        entityManager = entityManagerFactory.createEntityManager();
+        return Persistence.createEntityManagerFactory("alexa-music-data", properties);
     }
 
     public void save(AbstractCatalog catalog) {

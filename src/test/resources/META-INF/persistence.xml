@@ -8,12 +8,18 @@
         <class>f18a14c09s.integration.alexa.music.catalog.data.MusicAlbumCatalog</class>
         <class>f18a14c09s.integration.alexa.music.catalog.data.MusicRecordingCatalog</class>
         <class>f18a14c09s.integration.alexa.music.catalog.data.MusicGroupCatalog</class>
+        <class>f18a14c09s.integration.alexa.music.catalog.data.MusicPlaylistCatalog</class>
+        <class>f18a14c09s.integration.alexa.music.catalog.data.GenreCatalog</class>
+        <class>f18a14c09s.integration.alexa.music.catalog.data.BroadcastChannelCatalog</class>
         <class>f18a14c09s.integration.alexa.music.entities.BaseEntity</class>
         <class>f18a14c09s.integration.alexa.music.entities.ArtistReference</class>
         <class>f18a14c09s.integration.alexa.music.entities.Artist</class>
         <class>f18a14c09s.integration.alexa.music.entities.AlbumReference</class>
         <class>f18a14c09s.integration.alexa.music.entities.Album</class>
         <class>f18a14c09s.integration.alexa.music.entities.Track</class>
+        <class>f18a14c09s.integration.alexa.music.entities.Playlist</class>
+        <class>f18a14c09s.integration.alexa.music.entities.Genre</class>
+        <class>f18a14c09s.integration.alexa.music.entities.Station</class>
         <class>f18a14c09s.integration.alexa.music.entities.Popularity</class>
         <class>f18a14c09s.integration.alexa.music.entities.EntityName</class>
         <class>f18a14c09s.integration.alexa.music.entities.AlternateNames</class>
@@ -21,9 +27,10 @@
         <class>f18a14c09s.integration.alexa.data.Locale</class>
         <class>f18a14c09s.integration.alexa.music.data.Art</class>
         <class>f18a14c09s.integration.alexa.music.data.ArtSource</class>
+        <exclude-unlisted-classes>true</exclude-unlisted-classes>
         <properties>
-            <property name="hibernate.hbm2ddl.auto" value="create"/>
-            <property name="hibernate.archive.autodetection" value="class"/>
+            <!--<property name="hibernate.hbm2ddl.auto" value="create"/>-->
+            <!--<property name="hibernate.archive.autodetection" value="class"/>-->
             <property name="hibernate.dialect" value="org.hibernate.dialect.H2Dialect"/>
             <property name="hibernate.connection.driver_class" value="org.h2.Driver"/>
             <property name="hibernate.connection.url" value="jdbc:h2:./target/h2-1"/>
