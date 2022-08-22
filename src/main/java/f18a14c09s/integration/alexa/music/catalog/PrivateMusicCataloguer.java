@@ -77,7 +77,15 @@ class PrivateMusicCataloguer {
             dao.save(defaultArt);
             dao.commit();
             en_US = dao.findLocale(en_US.getCountry(), en_US.getLanguage());
-            entityIdsByTypeAndNaturalKey = dao.getCataloguedEntityIdsByTypeAndNaturalKey();
+            entityIdsByTypeAndNaturalKey = Map.of(
+                    EntityType.ARTIST,
+                    Map.of(),
+                    EntityType.ALBUM,
+                    Map.of(),
+                    EntityType.TRACK,
+                    Map.of()
+            );
+//            entityIdsByTypeAndNaturalKey = dao.getCataloguedEntityIdsByTypeAndNaturalKey();
         }
         this.entityFactory = new EntityFactory(en_US, entityIdsByTypeAndNaturalKey);
     }
@@ -116,6 +124,7 @@ class PrivateMusicCataloguer {
                 printDbSummary();
                 dao.close(true);
             }
+            dao.commit();
         }
     }
 

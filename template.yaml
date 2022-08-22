@@ -1,16 +1,106 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: 'AWS::Serverless-2016-10-31'
+
+#Parameters:
+#  vpcId:
+#    Type: String
+#    Default: vpc-7533ef0f
+
 Resources:
-  privateMusicAlexaSkill:
+  PrivateMusicAlexaSkillLambda:
     Type: 'AWS::Serverless::Function'
     Properties:
       FunctionName: privateMusicAlexaSkill
-      Runtime: java8
+      Runtime: java11
       Handler: f18a14c09s.integration.aws.PrivateMusicAlexaSkillRequestHandler::handleRequest
       CodeUri: ./target/lambda.jar
-      MemorySize: 512
-      Timeout: 15
-      Role: 'arn:aws:iam::734785652855:role/lambda_basic_execution'
+      MemorySize: 10240
+      Timeout: 60
       Events:
         AlexaSkillEvent:
           Type: AlexaSkill
+#      Environment:
+#        Variables:
+#          DATABASE_SECRET_ARN: !Ref RdsMasterAccountSecret
+#      Policies:
+#        - AWSSecretsManagerGetSecretValuePolicy:
+#            SecretArn: !Ref RdsMasterAccountSecret
+#      VpcConfig:
+#        SecurityGroupIds:
+#          - !Ref ApplicationSecurityGroup
+#        SubnetIds:
+#          - subnet-8d1393ea
+
+#  DatabaseSecurityGroup:
+#    Type: AWS::EC2::SecurityGroup
+#    Properties:
+#      GroupDescription: !Sub "Database security group for ${AWS::StackName}."
+#      SecurityGroupEgress:
+#        - CidrIp: 0.0.0.0/0
+#          Description: "Allow all outbound IPv4 traffic."
+#          IpProtocol: "-1"
+#      VpcId: !Ref vpcId
+#
+#  ApplicationSecurityGroup:
+#    Type: AWS::EC2::SecurityGroup
+#    Properties:
+#      GroupDescription: !Sub "AWS Lambda security group for ${AWS::StackName}."
+#      SecurityGroupEgress:
+#        - CidrIp: 0.0.0.0/0
+#          Description: "Allow all outbound IPv4 traffic."
+#          IpProtocol: "-1"
+#      VpcId: !Ref vpcId
+#
+#  TrafficFromApplicationToDatabase:
+#    Type: AWS::EC2::SecurityGroupIngress
+#    Properties:
+#      Description: "Allow inbound MySQL traffic from the AWS Lambda function(s)."
+#      IpProtocol: tcp
+#      SourceSecurityGroupId: !Sub "${ApplicationSecurityGroup.GroupId}"
+#      GroupId: !Sub "${DatabaseSecurityGroup.GroupId}"
+#      FromPort: 3306
+#      ToPort: 3306
+#
+#  DatabaseSubnetGroup:
+#    Type: AWS::RDS::DBSubnetGroup
+#    Properties:
+#      DBSubnetGroupDescription: !Sub "Database subnet group for ${AWS::StackName}."
+#      SubnetIds:
+#        - subnet-08feae42
+#        - subnet-8d1393ea
+#        - subnet-eeb067d0
+#
+#  RdsMasterAccountSecret:
+#    Type: AWS::SecretsManager::Secret
+#    Properties:
+#      Description: !Sub "Master account secret for ${AWS::StackName} database."
+#      GenerateSecretString:
+#        ExcludeCharacters: '/@"'
+#        GenerateStringKey: 'password'
+#        IncludeSpace: false
+#        PasswordLength: 37
+#        SecretStringTemplate: |
+#          {"username": "admin",
+#           "databaseDriver": "com.mysql.cj.jdbc.Driver",
+#           "hibernateDatabaseDialect": "org.hibernate.dialect.MySQL8Dialect",
+#           "databaseUrlTemplate": "jdbc:mysql://{host}:{port}/alexa-music-data?createDatabaseIfNotExist=true"}
+#
+#  MasterSecretDatabaseAttachment:
+#    Type: AWS::SecretsManager::SecretTargetAttachment
+#    Properties:
+#      SecretId: !Ref RdsMasterAccountSecret
+#      TargetId: !Ref RelationalDatabase
+#      TargetType: AWS::RDS::DBInstance
+#
+#  RelationalDatabase:
+#    Type: AWS::RDS::DBInstance
+#    Properties:
+#      Engine: mysql
+#      EngineVersion: 8.0
+#      DBInstanceClass: db.t4g.micro
+#      AllocatedStorage: 5 # Amount of storage (in gigabytes) to be initially allocated.
+#      MasterUsername: !Join [ '', [ '{{resolve:secretsmanager:', !Ref RdsMasterAccountSecret, ':SecretString:username}}' ] ]
+#      MasterUserPassword: !Join [ '', [ '{{resolve:secretsmanager:', !Ref RdsMasterAccountSecret, ':SecretString:password}}' ] ]
+#      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+#      VPCSecurityGroups:
+#        - !Sub "${DatabaseSecurityGroup.GroupId}"

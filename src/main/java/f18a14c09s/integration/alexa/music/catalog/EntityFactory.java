@@ -25,8 +25,13 @@ public class EntityFactory {
         retval.setNames(asArrayList(new EntityName(en, artistName)));
         retval.setPopularity(Popularity.unratedWithNoOverrides());
         retval.setLastUpdatedTime(Calendar.getInstance());
-        retval.setId(Optional.of(entityIdsByTypeAndNaturalKey.get(EntityType.ARTIST)
-                .get(Collections.singletonList(artistName))).orElseGet(() -> UUID.randomUUID().toString()));
+        retval.setId(
+                Optional.ofNullable(
+                        entityIdsByTypeAndNaturalKey.get(
+                                EntityType.ARTIST
+                        ).get(Collections.singletonList(artistName))
+                ).orElseGet(() -> UUID.randomUUID().toString())
+        );
         retval.setLocales(asArrayList(defaultLocale));
         retval.setArt(art);
         return retval;
@@ -68,7 +73,7 @@ public class EntityFactory {
         retval.setLocales(asArrayList(defaultLocale));
         retval.setUrl(url);
         retval.setArt(art);
-        retval.setId(Optional.of(entityIdsByTypeAndNaturalKey.get(EntityType.TRACK).get(Collections.singletonList(url)))
+        retval.setId(Optional.ofNullable(entityIdsByTypeAndNaturalKey.get(EntityType.TRACK).get(Collections.singletonList(url)))
                 .orElseGet(() -> UUID.randomUUID().toString()));
         return retval;
     }
