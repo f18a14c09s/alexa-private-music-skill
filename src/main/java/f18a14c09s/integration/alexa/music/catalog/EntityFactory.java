@@ -73,7 +73,9 @@ public class EntityFactory {
         retval.setLocales(asArrayList(defaultLocale));
         retval.setUrl(url);
         retval.setArt(art);
-        retval.setId(Optional.ofNullable(entityIdsByTypeAndNaturalKey.get(EntityType.TRACK).get(Collections.singletonList(url)))
+        String artistName = artist.getNames().get(0).getValue();
+        String albumName = album.getNames().get(0).getValue();
+        retval.setId(Optional.ofNullable(entityIdsByTypeAndNaturalKey.get(EntityType.TRACK).get(List.of(artistName, albumName, mp3.getTitle())))
                 .orElseGet(() -> UUID.randomUUID().toString()));
         return retval;
     }
