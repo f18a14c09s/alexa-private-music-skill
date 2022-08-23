@@ -266,15 +266,28 @@ class PrivateMusicCataloguer {
             Map<ArrayList<String>, AlbumReference> albums) throws IOException {
         List<Track> tracks = new ArrayList<>();
         List<Mp3Folder> mp3Folders = asArrayList(rootMp3Folder);
+        Map<String, String> trackUrlsById = new HashMap<>();
         while (!mp3Folders.isEmpty()) {
             Mp3Folder folder = mp3Folders.remove(0);
             mp3Folders.addAll(folder.getChildren());
-            folder.getMp3s()
-                    .forEach(metadata -> tracks.add(entityFactory.newTrackEntity(metadata,
-                            buildUrl(metadata.getFilePath()),
-                            artists.get(metadata.getAuthor()),
-                            albums.get(asArrayList(metadata.getAuthor(), metadata.getAlbum())),
-                            Optional.ofNullable(folder.getArt()).orElse(defaultArt))));
+            for(TrackMetadata metadata : folder.getMp3s()) {
+                Track trackEntity =  entityFactory.newTrackEntity(metadata,
+                                buildUrl(metadata.getFilePath()),
+                                artists.get(metadata.getAuthor()),
+                                albums.get(asArrayList(metadata.getAuthor(), metadata.getAlbum())),
+                                Optional.ofNullable(folder.getArt()).orElse(defaultArt));
+                if(trackUrlsById.containsKey(trackEntity.getId())) {
+                    System.out.printf(
+                        "Track appears to be a duplicate:%n\tEntity ID: %s%n\tTrack URL: %s%n\tPotential Duplicate URL: %s%n",
+                        trackEntity.getId(),
+                        trackUrlsById.get(trackEntity.getId()),
+                        trackEntity.getUrl()
+                    );
+                } else {
+                    tracks.add(trackEntity);
+                    trackUrlsById.put(trackEntity.getId(), trackEntity.getUrl());
+                }
+            }
         }
         MusicRecordingCatalog trackCatalog = new MusicRecordingCatalog();
         trackCatalog.setEntities(tracks);
