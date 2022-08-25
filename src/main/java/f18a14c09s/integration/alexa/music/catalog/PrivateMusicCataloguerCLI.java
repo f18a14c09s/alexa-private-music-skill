@@ -17,6 +17,7 @@ public class PrivateMusicCataloguerCLI {
     public static final String ARG_NAME_IMAGE_BASE_URL = "--image-base-url";
     public static final String ARG_NAME_RESET = "--reset";
     public static final String ARG_NAME_WRITE_TO_DB = "--write-to-db";
+    public static final String ARG_NAME_SRC_CATALOG_DIR = "--src-catalog-dir";
 
     public static void main(String... args) throws IOException, NoSuchAlgorithmException {
         PrivateMusicCataloguer cli = newCataloguer(parseCommandLineArguments(args));
@@ -27,7 +28,7 @@ public class PrivateMusicCataloguerCLI {
             IOException,
             NoSuchAlgorithmException {
         List<String> validationErrors = new ArrayList<>();
-        File src = null, dest = null;
+        File src = null, dest = null, srcCatalogDir = null;
         String baseUrl = null;
         String imageBaseUrl = null;
         boolean reset = args.containsKey(ARG_NAME_RESET);
@@ -53,7 +54,10 @@ public class PrivateMusicCataloguerCLI {
         if (args.containsKey(ARG_NAME_DEST_DIR)) {
             dest = new File((String) args.get(ARG_NAME_DEST_DIR).get(0));
         }
-        return new PrivateMusicCataloguer(src, dest, baseUrl, reset, imageBaseUrl, writeToDb);
+        if (args.containsKey(ARG_NAME_SRC_CATALOG_DIR)) {
+            srcCatalogDir = new File((String) args.get(ARG_NAME_SRC_CATALOG_DIR).get(0));
+        }
+        return new PrivateMusicCataloguer(src, dest, baseUrl, reset, imageBaseUrl, writeToDb, srcCatalogDir);
     }
 
     private static Map<String, List<Object>> parseCommandLineArguments(String... args) {
@@ -88,6 +92,7 @@ public class PrivateMusicCataloguerCLI {
         retval.put(ARG_NAME_IMAGE_BASE_URL, Collections.unmodifiableList(Arrays.asList(UnaryOperator.identity())));
         retval.put(ARG_NAME_RESET, null);
         retval.put(ARG_NAME_WRITE_TO_DB, null);
+        retval.put(ARG_NAME_SRC_CATALOG_DIR, Collections.unmodifiableList(Arrays.asList(UnaryOperator.identity())));
         return Collections.unmodifiableMap(retval);
     }
 

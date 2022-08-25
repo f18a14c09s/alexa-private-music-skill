@@ -36,22 +36,23 @@ public class CatalogDAO {
         xref.put("javax.persistence.jdbc.url", "databaseUrl");
         xref.put("javax.persistence.jdbc.user", "username");
         xref.put("javax.persistence.jdbc.password", "password");
+        xref.put("jakarta.persistence.jdbc.driver", "databaseDriver");
+        xref.put("jakarta.persistence.jdbc.url", "databaseUrl");
+        xref.put("jakarta.persistence.jdbc.user", "username");
+        xref.put("jakarta.persistence.jdbc.password", "password");
         xref.put("hibernate.dialect", "hibernateDatabaseDialect");
         for (Map.Entry<String, String> kvp : xref.entrySet()) {
-            Optional<String> value = Optional.ofNullable(System.getenv(kvp.getValue()));
-            if (!value.isPresent()) {
-                if (secret == null) {
+            if (secret == null) {
 //                    String secretArn = System.getenv("DATABASE_SECRET_ARN");
 //                    secret = awsSecrets.getSecret(secretArn);
-                    secret = new HashMap<>();
-                    secret.put("databaseDriver", "org.h2.Driver");
-                    secret.put("username", "sa");
-                    secret.put("password", "");
-                    secret.put("hibernateDatabaseDialect", "org.hibernate.dialect.H2Dialect");
-                    secret.put("databaseUrl", "jdbc:h2:file:./alexa-music-data");
-                }
-                value = Optional.ofNullable((String) secret.get(kvp.getValue()));
+                secret = new HashMap<>();
+                secret.put("databaseDriver", "org.h2.Driver");
+                secret.put("username", "sa");
+                secret.put("password", "sa-password");
+                secret.put("hibernateDatabaseDialect", "org.hibernate.dialect.H2Dialect");
+                secret.put("databaseUrl", "jdbc:h2:file:./alexa-music-data");
             }
+            Optional<String> value = Optional.ofNullable((String) secret.get(kvp.getValue()));
             if (value.isPresent()) {
                 properties.put(kvp.getKey(), value.get());
             }
