@@ -1,0 +1,306 @@
+package f18a14c09s.integration.alexa.music.catalog;
+
+import f18a14c09s.integration.alexa.data.Country;
+import f18a14c09s.integration.alexa.data.Language;
+import f18a14c09s.integration.alexa.data.Locale;
+import f18a14c09s.integration.alexa.music.catalog.data.AbstractCatalog;
+import f18a14c09s.integration.alexa.music.catalog.data.MusicRecordingCatalog;
+import f18a14c09s.integration.alexa.music.data.Art;
+import f18a14c09s.integration.alexa.music.entities.*;
+import lombok.Getter;
+import lombok.Setter;
+import software.amazon.awssdk.enhanced.dynamodb.DynamoDbEnhancedClient;
+import software.amazon.awssdk.enhanced.dynamodb.DynamoDbTable;
+import software.amazon.awssdk.enhanced.dynamodb.Key;
+import software.amazon.awssdk.enhanced.dynamodb.TableSchema;
+import software.amazon.awssdk.enhanced.dynamodb.model.Page;
+import software.amazon.awssdk.enhanced.dynamodb.model.PageIterable;
+import software.amazon.awssdk.enhanced.dynamodb.model.QueryConditional;
+import software.amazon.awssdk.services.dynamodb.model.*;
+
+import java.io.IOException;
+import java.util.*;
+import java.util.function.Supplier;
+
+
+public class DynamoDBCatalogDAO {
+    @Getter
+    @Setter
+    public static final class AttributesOnlyCatalog {
+        private Long id;
+        private String type;
+        private Double version;
+        private String defaultUsage;
+    }
+
+    public static interface StringPkStringSkDynamoDbItem {
+        String getPk();
+        String getSk();
+        void setPk(String pk);
+        void setSk(String sk);
+    }
+
+    public static interface StringPkIntegerSkDynamoDbItem {
+        String getPk();
+        Integer getSk();
+        void setPk(String pk);
+        void setSk(Integer sk);
+    }
+
+    @Getter
+    @Setter
+    public static abstract class AbstractMusicEntityItem <E extends BaseEntity> implements StringPkStringSkDynamoDbItem {
+        private String pk;
+        private String sk;
+        private E entity;
+    }
+
+    public static final class TrackItem extends AbstractMusicEntityItem<Track> {}
+
+    public static final class AlbumItem extends AbstractMusicEntityItem<Album> {}
+
+    public static final class ArtistItem extends AbstractMusicEntityItem<Artist> {}
+
+    @Getter
+    @Setter
+    public static final class ChildTrackItem implements StringPkIntegerSkDynamoDbItem {
+        private String pk;
+        private Integer sk;
+        private String trackId;
+
+        public static String formatPartitionKey(
+            Class<? extends BaseEntity> parentEntityClass,
+            String parentEntityId
+        ) {
+            return String.format(
+                "MUSICENTITYTYPE=%s,ENTITYID=%s,LISTTYPE=CHILDTRACKS",
+                parentEntityClass.getSimpleName(),
+                parentEntityId
+            );
+        }
+    }
+
+    private DynamoDbEnhancedClient dynamodbClient;
+
+    public DynamoDBCatalogDAO() {}
+
+    public void save(Track musicEntity) {
+        saveMusicEntity(musicEntity, new TrackItem(), TrackItem.class);
+    }
+
+    public void save(Album musicEntity) {
+        saveMusicEntity(musicEntity, new AlbumItem(), AlbumItem.class);
+    }
+
+    public void save(Artist musicEntity) {
+        saveMusicEntity(musicEntity, new ArtistItem(), ArtistItem.class);
+    }
+
+    public void saveChildTrackAssociations(
+        Class<? extends BaseEntity> musicEntityClass,
+        String entityId,
+        List<Track> presortedChildTracks
+    ) {
+        for(int i = 0; i < presortedChildTracks.size(); i++) {
+            ChildTrackItem dynamodbItem = new ChildTrackItem();
+            dynamodbItem.setPk(
+                ChildTrackItem.formatPartitionKey(
+                    musicEntityClass,
+                    entityId
+                )
+            );
+            dynamodbItem.setSk(i);
+            dynamodbItem.setTrackId(presortedChildTracks.get(i).getId());
+            // TODO: This won't work because it's the wrong table:
+            saveEntity(dynamodbItem, ChildTrackItem.class);
+        }
+    }
+
+    private static String formatMusicEntityPartitionKey(
+        Class<? extends BaseEntity> clazz
+    ) {
+        return String.format(
+            "MUSICENTITYTYPE=%s",
+            clazz.getSimpleName()
+        );
+    }
+
+    private static String formatMusicEntitySortKey(
+        String id
+    ) {
+        return String.format(
+            "ENTITYID=%s,LISTTYPE=MUSICENTITIES",
+            id
+        );
+    }
+
+    private <E extends BaseEntity, DE extends AbstractMusicEntityItem<E>> void saveMusicEntity(E entity, DE dynamoDbItem, Class<DE> clazz) {
+        dynamoDbItem.setEntity(entity);
+        dynamoDbItem.setPk(formatMusicEntityPartitionKey(entity.getClass()));
+        dynamoDbItem.setSk(formatMusicEntitySortKey(entity.getId()));
+        saveEntity(dynamoDbItem, clazz);
+    }
+
+    private <E extends Object> void saveEntity(E entity, Class<E> clazz) {
+        DynamoDbTable<E> catalogTableWithEntitySpecificSchema = dynamodbClient.table(
+            "StringPkStringSk", TableSchema.fromBean(clazz)
+        );
+        catalogTableWithEntitySpecificSchema.putItem(entity);
+    }
+
+    public Track findTrack(String id) {
+        return findMusicEntity(
+            Track.class, id, new TrackItem(), TrackItem.class
+        );
+    }
+
+    public Album findAlbum(String id) {
+        return findMusicEntity(
+            Album.class, id, new AlbumItem(), AlbumItem.class
+        );
+    }
+
+    public Artist findArtist(String id) {
+        return findMusicEntity(
+            Artist.class, id, new ArtistItem(), ArtistItem.class
+        );
+    }
+
+    private <E extends BaseEntity, DE extends AbstractMusicEntityItem<E>> E findMusicEntity(
+        Class<E> clazz, String id, DE keyHolder, Class<DE> dynamodbItemClass
+    ) {
+        DynamoDbTable<DE> catalogTableWithEntitySpecificSchema = dynamodbClient.table(
+            "StringPkStringSk", TableSchema.fromBean(dynamodbItemClass)
+        );
+        keyHolder.setPk(formatMusicEntityPartitionKey(clazz));
+        keyHolder.setSk(formatMusicEntitySortKey(id));
+        DE actualItem = catalogTableWithEntitySpecificSchema.getItem(
+            keyHolder
+        );
+        return actualItem == null ? null : actualItem.getEntity();
+    }
+
+    public Track getFirstChildTrack(
+        Class<? extends BaseEntity> parentEntityClass,
+        String parentEntityId
+    ) {
+        PageIterable<ChildTrackItem> childTracks = iterateChildTracks(
+            parentEntityClass, parentEntityId
+        );
+        ChildTrackItem firstChildItem = childTracks.stream().limit(
+            1
+        ).map(
+            Page::items
+        ).flatMap(
+            List::stream
+        ).findFirst().orElse(null);
+        if(firstChildItem == null) {
+            return null;
+        }
+        return findTrack(
+            firstChildItem.getTrackId()
+        );
+    }
+
+    public Track getPreviousChildTrack(
+        Class<? extends BaseEntity> parentEntityClass,
+        String parentEntityId,
+        String currentTrackId
+    ) {
+        PageIterable<ChildTrackItem> childTracks = iterateChildTracks(
+            parentEntityClass, parentEntityId
+        );
+        boolean currentTrackFound = false;
+        ChildTrackItem previousChildItem = null;
+        for(Page<ChildTrackItem> page : childTracks) {
+            for(ChildTrackItem childTrackItem : page.items()) {
+                if(childTrackItem.getTrackId().equals(currentTrackId)) {
+                    currentTrackFound = true;
+                    break;
+                }
+                previousChildItem = childTrackItem;
+            }
+            if(currentTrackFound) {
+                break;
+            }
+        }
+        if(!currentTrackFound) {
+            return null;
+        }
+        return findTrack(
+            previousChildItem.getTrackId()
+        );
+    }
+
+    public Track getNextChildTrack(
+        Class<? extends BaseEntity> parentEntityClass,
+        String parentEntityId,
+        String currentTrackId
+    ) {
+        PageIterable<ChildTrackItem> childTracks = iterateChildTracks(
+            parentEntityClass, parentEntityId
+        );
+        boolean currentTrackFound = false;
+        ChildTrackItem nextChildItem = null;
+        for(Page<ChildTrackItem> page : childTracks) {
+            for(ChildTrackItem childTrackItem : page.items()) {
+                if(currentTrackFound) {
+                    nextChildItem = childTrackItem;
+                    break;
+                } else if(childTrackItem.getTrackId().equals(currentTrackId)) {
+                    currentTrackFound = true;
+                }
+            }
+            if(nextChildItem != null) {
+                break;
+            }
+        }
+        if(nextChildItem == null) {
+            return null;
+        }
+        return findTrack(
+            nextChildItem.getTrackId()
+        );
+    }
+
+    private PageIterable<ChildTrackItem> iterateChildTracks(
+        Class<? extends BaseEntity> parentEntityClass,
+        String parentEntityId
+    ) {
+        DynamoDbTable<ChildTrackItem> catalogTableWithEntitySpecificSchema = dynamodbClient.table(
+            "StringPkIntegerSk", TableSchema.fromBean(ChildTrackItem.class)
+        );
+        String partitionKey = ChildTrackItem.formatPartitionKey(
+            parentEntityClass,
+            parentEntityId
+        );
+        return catalogTableWithEntitySpecificSchema.query(
+            QueryConditional.keyEqualTo(
+                Key.builder().partitionValue(
+                    partitionKey
+                ).build()
+            )
+        );
+    }
+
+    // GetPlayableContent:
+    // Get music entity (e.g. artist, album, track) by type and ID.
+    // Table with string partition key; String sort key:
+    //     MUSICENTITYTYPE=...; ENTITYID=...,LISTTYPE=MUSICENTITIES
+    //
+    // Initiate:
+    // Either list and sort all of the artist/album's tracks or find the artist/album's first track.
+    // Table with string partition key; numeric sort key:
+    //     MUSICENTITYTYPE=...,ENTITYID=...,LISTTYPE=CHILDTRACKS; 123
+    // Return the first item.
+    //
+    // GetPreviousItem:
+    // Either list and sort all of the artist/album's tracks or find the artist/album's track immediately preceding current track.
+    // Same DynamoDB query as Initiate.
+    // Iterate the result list until the current track is found, then return the previous item if it exists.
+    //
+    // GetNextItem:
+    // Either list and sort all of the artist/album's tracks or find the artist/album's track immediately following current track.
+    // Same DynamoDB query as Initiate.
+    // Iterate the result list until the current track is found, then return the next item if it exists.
+}
