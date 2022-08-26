@@ -1,13 +1,10 @@
-package f18a14c09s.integration.alexa.music.catalog;
+package f18a14c09s.integration.alexa.smapi;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import f18a14c09s.integration.alexa.music.catalog.data.AbstractCatalog;
+import f18a14c09s.integration.alexa.smapi.data.*;
 import f18a14c09s.util.StringObjectMap;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.Setter;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -26,61 +23,6 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 public class CatalogContentUploadClient {
-    @Getter
-    @Setter
-    public static class Catalog {
-        private String id;
-        private String title;
-        private String type;
-        private String usage;
-        private String lastUpdatedDate;
-        private String createdDate;
-        private List<String> associatedSkillIds;
-    }
-
-    @Getter
-    @Setter
-    public static class CatalogCreationRequest {
-        private String title;
-        private String type;
-        private String usage;
-        private String vendorId;
-    }
-
-    @Getter
-    @Setter
-    public static class CatalogListing {
-        @JsonProperty("_links")
-        private StringObjectMap links;
-        @JsonProperty("isTruncated")
-        private Boolean truncated;
-        private String nextToken;
-        private List<Catalog> catalogs;
-    }
-
-    @Getter
-    @AllArgsConstructor
-    public enum ApiMethod {
-        LIST_CATALOGS(
-                "GET",
-                "/v0/catalogs"
-        ),
-        CREATE_CATALOG(
-                "POST",
-                "/v0/catalogs"
-        ),
-        CREATE_UPLOAD(
-                "POST",
-                "/v0/catalogs/{catalogId}/uploads"
-        ),
-        COMPLETE_UPLOAD(
-                "POST",
-                "/v0/catalogs/{catalogId}/uploads/{uploadId}"
-        );
-        private final String method;
-        private final String path;
-    }
-
     public static final String DEFAULT_API_ENDPOINT = (
             "https://api.amazonalexa.com"
     );
@@ -91,7 +33,10 @@ public class CatalogContentUploadClient {
     private String accessToken;
     private ObjectMapper jsonMapper = new ObjectMapper();
 
-    {
+    public CatalogContentUploadClient(
+            String accessToken
+    ) {
+        this.accessToken = accessToken;
         jsonMapper.enable(
                 SerializationFeature.INDENT_OUTPUT
         );
@@ -126,7 +71,7 @@ public class CatalogContentUploadClient {
         String path = apiMethod.getPath();
         if (pathParams != null) {
             for (String pathParamName : pathParams.keySet()) {
-                path = path.replaceAll(
+                path = path.replace(
                         String.format(
                                 "{%s}",
                                 pathParamName
@@ -256,6 +201,24 @@ public class CatalogContentUploadClient {
         );
     }
 
+    public void associateCatalogWithSkill(
+            String skillId,
+            String catalogId
+    ) throws IOException {
+        callAlexaApi(
+                ApiMethod.ASSOCIATE_CATALOG_WITH_SKILL,
+                Map.of(
+                        "skillId",
+                        skillId,
+                        "catalogId",
+                        catalogId
+                ),
+                null,
+                null,
+                null
+        );
+    }
+
     public StringObjectMap createUpload(
             String catalogId,
             Integer numberOfUploadParts
@@ -285,7 +248,7 @@ public class CatalogContentUploadClient {
             List<StringObjectMap> partETags
     ) throws IOException {
         return callAlexaApi(
-                ApiMethod.CREATE_UPLOAD,
+                ApiMethod.COMPLETE_UPLOAD,
                 Map.of(
                         "catalogId",
                         catalogId,
@@ -305,20 +268,49 @@ public class CatalogContentUploadClient {
         );
     }
 
-    public static void main(String... args) throws IOException {
-        CatalogContentUploadClient client = new CatalogContentUploadClient();
-        client.accessToken = "";
-        System.out.println(
-                client.jsonMapper.writeValueAsString(
-                        client.listCatalogs(
-                                ""
-                        )
-                )
+    public List<Upload> listUploads(
+            String catalogId
+    ) throws IOException {
+        Map<String, List<String>> query = new HashMap<>();
+        query.put("maxResults", List.of(Integer.toString(50)));
+        List<Upload> allUploads = new ArrayList<>();
+        for (; ; ) {
+            UploadListing listing = callAlexaApi(
+                    ApiMethod.LIST_UPLOADS,
+                    Map.of(
+                            "catalogId",
+                            catalogId
+                    ),
+                    query,
+                    null,
+                    UploadListing.class
+            );
+            if (listing.getUploads() != null) {
+                allUploads.addAll(listing.getUploads());
+            }
+            if (listing.getNextToken() == null) {
+                break;
+            }
+            query.put("nextToken", List.of(listing.getNextToken()));
+        }
+        return allUploads;
+    }
+
+    public Upload getUpload(
+            String catalogId,
+            String uploadId
+    ) throws IOException {
+        return callAlexaApi(
+                ApiMethod.GET_UPLOAD,
+                Map.of(
+                        "catalogId",
+                        catalogId,
+                        "uploadId",
+                        uploadId
+                ),
+                null,
+                null,
+                Upload.class
         );
-//        MusicRecordingCatalog trackCatalog = new MusicRecordingCatalog();
-//        System.out.println(client.createCatalog(
-//                trackCatalog,
-//                ""
-//        ));
     }
 }
