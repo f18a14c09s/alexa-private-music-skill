@@ -91,34 +91,34 @@ class PrivateMusicCataloguer {
                 new HashMap<>());
         // entityIdsByTypeAndNaturalKey =
         // dao.getCataloguedEntityIdsByTypeAndNaturalKey();
-        Map<EntityType, Map<List<String>, Set<String>>> entityIdsByTypeAndNaturalKeyWithPotentialDuplicates = CatalogDirectoryReader
-                .readCatalogDirectory(
-                        Map.of(
-                                EntityType.ARTIST,
-                                new File(srcCatalogDir, "AMAZON.MusicGroup Catalog 8.json"),
-                                EntityType.ALBUM,
-                                new File(srcCatalogDir, "AMAZON.MusicAlbum Catalog 1643.json"),
-                                EntityType.TRACK,
-                                new File(srcCatalogDir, "AMAZON.MusicRecording Catalog 3680.json")));
-        for (EntityType entityType : entityIdsByTypeAndNaturalKeyWithPotentialDuplicates.keySet()) {
-            for (List<String> entityKey : entityIdsByTypeAndNaturalKeyWithPotentialDuplicates.get(entityType)
-                    .keySet()) {
-                Set<String> entityIds = entityIdsByTypeAndNaturalKeyWithPotentialDuplicates.get(entityType)
-                        .get(entityKey);
-                if (entityIds.size() > 1) {
-                    System.out.printf(
-                            "%s,%s has multiple entity IDs:%s%n",
-                            entityType,
-                            entityKey,
-                            entityIds.stream().map(entityId -> String.format("%n\t%s", entityId))
-                                    .collect(Collectors.joining()));
-                }
-                entityIdsByTypeAndNaturalKey.get(entityType).put(
-                        entityKey,
-                        entityIds.iterator().next()
-                );
-            }
-        }
+//        Map<EntityType, Map<List<String>, Set<String>>> entityIdsByTypeAndNaturalKeyWithPotentialDuplicates = CatalogDirectoryReader
+//                .readCatalogDirectory(
+//                        Map.of(
+//                                EntityType.ARTIST,
+//                                new File(srcCatalogDir, "AMAZON.MusicGroup Catalog 8.json"),
+//                                EntityType.ALBUM,
+//                                new File(srcCatalogDir, "AMAZON.MusicAlbum Catalog 1643.json"),
+//                                EntityType.TRACK,
+//                                new File(srcCatalogDir, "AMAZON.MusicRecording Catalog 3680.json")));
+//        for (EntityType entityType : entityIdsByTypeAndNaturalKeyWithPotentialDuplicates.keySet()) {
+//            for (List<String> entityKey : entityIdsByTypeAndNaturalKeyWithPotentialDuplicates.get(entityType)
+//                    .keySet()) {
+//                Set<String> entityIds = entityIdsByTypeAndNaturalKeyWithPotentialDuplicates.get(entityType)
+//                        .get(entityKey);
+//                if (entityIds.size() > 1) {
+//                    System.out.printf(
+//                            "%s,%s has multiple entity IDs:%s%n",
+//                            entityType,
+//                            entityKey,
+//                            entityIds.stream().map(entityId -> String.format("%n\t%s", entityId))
+//                                    .collect(Collectors.joining()));
+//                }
+//                entityIdsByTypeAndNaturalKey.get(entityType).put(
+//                        entityKey,
+//                        entityIds.iterator().next()
+//                );
+//            }
+//        }
         this.entityFactory = new EntityFactory(en_US, entityIdsByTypeAndNaturalKey);
     }
 
