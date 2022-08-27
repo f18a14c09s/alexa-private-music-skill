@@ -23,12 +23,13 @@ import software.amazon.awssdk.services.s3.model.*;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.*;
-import java.net.URI;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
+import java.util.concurrent.*;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -37,6 +38,7 @@ import static f18a14c09s.util.CollectionUtil.asArrayList;
 class PrivateMusicCataloguer {
     public static final String MP3EXT = ".mp3";
     public static final String JPGEXT = ".jpg";
+    public static final String ROOT_S3_PREFIX = "MP3_Albums/";
     //    private boolean reset;
 //    private boolean writeToDisk;
 //    private boolean writeToDb;
@@ -50,7 +52,7 @@ class PrivateMusicCataloguer {
     private JSONAdapter jsonAdapter;
     private MessageDigest sha256Digester;
     private Base64.Encoder base64Encoder;
-    private S3Client s3Client=S3Client.create();
+    private S3Client s3Client = S3Client.create();
     private Locale en_US;
     private Art defaultArt;
 
@@ -61,7 +63,6 @@ class PrivateMusicCataloguer {
                            String imageBaseUrl,
                            boolean writeToDb,
                            File srcCatalogDir) throws IOException, NoSuchAlgorithmException {
-//        this.srcDir = srcDir;
         this.srcS3Bucket = "music.francisjohnson.org";
 //        this.destDir = destDir;
         this.baseUrl = baseUrl;
@@ -76,48 +77,46 @@ class PrivateMusicCataloguer {
         this.defaultArt = defaultArtObject(imageBaseUrl);
         this.en_US = Locale.en_US();
         Map<EntityType, Map<List<String>, String>> entityIdsByTypeAndNaturalKey = null;
-        if (writeToDb) {
-            this.dao = new CatalogDAO(Hbm2DdlAuto.create);
-            dao.save(en_US);
-            dao.save(defaultArt);
-            dao.commit();
-            en_US = dao.findLocale(en_US.getCountry(), en_US.getLanguage());
-            entityIdsByTypeAndNaturalKey = Map.of(
-                    EntityType.ARTIST,
-                    new HashMap<>(),
-                    EntityType.ALBUM,
-                    new HashMap<>(),
-                    EntityType.TRACK,
-                    new HashMap<>());
-            // entityIdsByTypeAndNaturalKey =
-            // dao.getCataloguedEntityIdsByTypeAndNaturalKey();
-            Map<EntityType, Map<List<String>, Set<String>>> entityIdsByTypeAndNaturalKeyWithPotentialDuplicates = CatalogDirectoryReader
-                    .readCatalogDirectory(
-                            Map.of(
-                                    EntityType.ARTIST,
-                                    new File(srcCatalogDir, "AMAZON.MusicGroup Catalog 8.json"),
-                                    EntityType.ALBUM,
-                                    new File(srcCatalogDir, "AMAZON.MusicAlbum Catalog 1643.json"),
-                                    EntityType.TRACK,
-                                    new File(srcCatalogDir, "AMAZON.MusicRecording Catalog 3680.json")));
-            for (EntityType entityType : entityIdsByTypeAndNaturalKeyWithPotentialDuplicates.keySet()) {
-                for (List<String> entityKey : entityIdsByTypeAndNaturalKeyWithPotentialDuplicates.get(entityType)
-                        .keySet()) {
-                    Set<String> entityIds = entityIdsByTypeAndNaturalKeyWithPotentialDuplicates.get(entityType)
-                            .get(entityKey);
-                    if (entityIds.size() > 1) {
-                        System.out.printf(
-                                "%s,%s has multiple entity IDs:%s%n",
-                                entityType,
-                                entityKey,
-                                entityIds.stream().map(entityId -> String.format("%n\t%s", entityId))
-                                        .collect(Collectors.joining()));
-                    }
-                    entityIdsByTypeAndNaturalKey.get(entityType).put(
+        this.dao = new CatalogDAO(Hbm2DdlAuto.create);
+        dao.save(en_US);
+        dao.save(defaultArt);
+        dao.commit();
+        en_US = dao.findLocale(en_US.getCountry(), en_US.getLanguage());
+        entityIdsByTypeAndNaturalKey = Map.of(
+                EntityType.ARTIST,
+                new HashMap<>(),
+                EntityType.ALBUM,
+                new HashMap<>(),
+                EntityType.TRACK,
+                new HashMap<>());
+        // entityIdsByTypeAndNaturalKey =
+        // dao.getCataloguedEntityIdsByTypeAndNaturalKey();
+        Map<EntityType, Map<List<String>, Set<String>>> entityIdsByTypeAndNaturalKeyWithPotentialDuplicates = CatalogDirectoryReader
+                .readCatalogDirectory(
+                        Map.of(
+                                EntityType.ARTIST,
+                                new File(srcCatalogDir, "AMAZON.MusicGroup Catalog 8.json"),
+                                EntityType.ALBUM,
+                                new File(srcCatalogDir, "AMAZON.MusicAlbum Catalog 1643.json"),
+                                EntityType.TRACK,
+                                new File(srcCatalogDir, "AMAZON.MusicRecording Catalog 3680.json")));
+        for (EntityType entityType : entityIdsByTypeAndNaturalKeyWithPotentialDuplicates.keySet()) {
+            for (List<String> entityKey : entityIdsByTypeAndNaturalKeyWithPotentialDuplicates.get(entityType)
+                    .keySet()) {
+                Set<String> entityIds = entityIdsByTypeAndNaturalKeyWithPotentialDuplicates.get(entityType)
+                        .get(entityKey);
+                if (entityIds.size() > 1) {
+                    System.out.printf(
+                            "%s,%s has multiple entity IDs:%s%n",
+                            entityType,
                             entityKey,
-                            entityIds.iterator().next()
-                    );
+                            entityIds.stream().map(entityId -> String.format("%n\t%s", entityId))
+                                    .collect(Collectors.joining()));
                 }
+                entityIdsByTypeAndNaturalKey.get(entityType).put(
+                        entityKey,
+                        entityIds.iterator().next()
+                );
             }
         }
         this.entityFactory = new EntityFactory(en_US, entityIdsByTypeAndNaturalKey);
@@ -126,7 +125,7 @@ class PrivateMusicCataloguer {
     void catalogMusic() throws IOException, NoSuchAlgorithmException {
         // System.out.printf("Locale %s-%s has ID %s.%n", en_US.getLanguage(),
         // en_US.getCountry(), en_US.getId());
-        Mp3Folder rootMp3Folder = collectTrackInfoRecursivelyS3("MP3_Albums/", 0);
+        Mp3Folder rootMp3Folder = collectTrackInfoRecursivelyS3(ROOT_S3_PREFIX, 0);
         printFolderSummary(rootMp3Folder);
         Map<String, Artist> artists = catalogArtists(rootMp3Folder);
         Map<String, String> artistIdToName = artists.entrySet()
@@ -299,6 +298,8 @@ class PrivateMusicCataloguer {
         for (ListObjectsV2Response response : s3Client.listObjectsV2Paginator(
                 ListObjectsV2Request.builder().bucket(
                         srcS3Bucket
+                ).delimiter(
+                        "/" // DO NOT forget this!
                 ).prefix(
                         s3Prefix
                 ).build()
@@ -306,10 +307,30 @@ class PrivateMusicCataloguer {
             commonPrefixes.addAll(response.commonPrefixes());
             s3Objects.addAll(response.contents());
         }
-        for (CommonPrefix subdir : commonPrefixes) {
-            children.add(collectTrackInfoRecursivelyS3(subdir.prefix(), level + 1));
+        List<TrackMetadata> mp3s = collectTrackMetadataS3(s3Objects);
+        // TODO: Remove this:
+        System.out.printf(
+                "Found %s MP3s at S3 prefix %s.%n",
+                mp3s.size(),
+                s3Prefix
+        );
+        if (!mp3s.isEmpty()) {
+            commonPrefixes.clear();
         }
-        return new Mp3Folder(collectTrackMetadataS3(s3Objects), collectAlbumArtS3(s3Objects), level, children);
+        for (CommonPrefix subdir : commonPrefixes) {
+            Mp3Folder child = collectTrackInfoRecursivelyS3(subdir.prefix(), level + 1);
+            children.add(child);
+            System.out.printf(
+                    "Found %s MP3s under child S3 prefix %s.%n",
+                    child.recurseMp3s().count(),
+                    subdir
+            );
+            // TODO: Remove this:
+            if (child.recurseMp3s().findAny().isPresent()) {
+                break;
+            }
+        }
+        return new Mp3Folder(mp3s, collectAlbumArtS3(s3Objects), level, children);
     }
 
     // private List<TrackMetadata> collectTrackMetadata(File dir) {
@@ -342,30 +363,75 @@ class PrivateMusicCataloguer {
     //     return retval;
     // }
 
+    private static String removeRootS3Prefix(String s3PrefixOrKey) {
+        return s3PrefixOrKey.replaceAll("^" + Pattern.quote(ROOT_S3_PREFIX), "");
+    }
+
+    private TrackMetadata parseTrackMetadataS3(S3Object s3Object) {
+        System.out.printf(
+                "Retrieving S3 object %s.%n",
+                s3Object.key()
+        );
+        try (InputStream s3InputStream = s3Client.getObject(
+                GetObjectRequest.builder().bucket(
+                        srcS3Bucket
+                ).key(
+                        s3Object.key()
+                ).build()
+        )) {
+            TrackMetadata track = mp3Adapter.parseMetadata(
+                    s3InputStream
+            );
+            track.setFilePath(removeRootS3Prefix(s3Object.key()));
+            track.setAuthor(Optional.ofNullable(track.getAuthor()).orElse("Unknown"));
+            track.setAlbum(Optional.ofNullable(track.getAlbum()).orElse("Unknown"));
+            track.setTitle(Optional.ofNullable(track.getTitle()).orElse("Unknown"));
+            return track;
+        } catch (IOException | InvalidAudioFrameException | TagException | ReadOnlyFileException e) {
+            throw new RuntimeException(String.format("Failure retrieving or parsing %s.", s3Object.key()), e);
+        }
+    }
+
     private List<TrackMetadata> collectTrackMetadataS3(List<S3Object> s3Objects) {
         List<TrackMetadata> retval = new ArrayList<>();
         List<S3Object> mp3s = s3Objects.stream().filter(s3Object -> s3Object.key().toLowerCase().endsWith(MP3EXT)).collect(Collectors.toList());
-        if (mp3s.size() >= 1) {
-            mp3s.stream().map(mp3 -> {
-                URI relativePath = URI.create("MP3_Albums").relativize(URI.create(mp3.key()));
-                try (InputStream s3InputStream = s3Client.getObject(
-                        GetObjectRequest.builder().key(
-                                mp3.key()
-                        ).build()
-                )) {
-                    TrackMetadata track = mp3Adapter.parseMetadata(
-                            s3InputStream
-                    );
-                    track.setFilePath(relativePath.toString());
-                    track.setAuthor(Optional.ofNullable(track.getAuthor()).orElse("Unknown"));
-                    track.setAlbum(Optional.ofNullable(track.getAlbum()).orElse("Unknown"));
-                    track.setTitle(Optional.ofNullable(track.getTitle()).orElse("Unknown"));
-                    return track;
-                } catch (IOException | InvalidAudioFrameException | TagException | ReadOnlyFileException e) {
-                    throw new RuntimeException(String.format("Failure parsing %s.", mp3.key()), e);
-                }
-            }).forEach(retval::add);
+        ExecutorService executor = Executors.newFixedThreadPool(10);
+        List<Future<TrackMetadata>> tasks;
+        try {
+            tasks = executor.invokeAll(mp3s.stream().<Callable<TrackMetadata>>map(s3Object -> (() -> parseTrackMetadataS3(s3Object))).collect(Collectors.toList()));
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
         }
+        for (Future<TrackMetadata> task : tasks) {
+            try {
+                retval.add(task.get());
+            } catch (InterruptedException | ExecutionException e) {
+                e.printStackTrace();
+            }
+        }
+//        if (mp3s.size() >= 1) {
+//            mp3s.stream().map(mp3 -> {
+//                try (InputStream s3InputStream = s3Client.getObject(
+//                        GetObjectRequest.builder().bucket(
+//                                srcS3Bucket
+//                        ).key(
+//                                mp3.key()
+//                        ).build()
+//                )) {
+//                    TrackMetadata track = mp3Adapter.parseMetadata(
+//                            s3InputStream
+//                    );
+//                    track.setFilePath(removeRootS3Prefix(mp3.key()));
+//                    track.setAuthor(Optional.ofNullable(track.getAuthor()).orElse("Unknown"));
+//                    track.setAlbum(Optional.ofNullable(track.getAlbum()).orElse("Unknown"));
+//                    track.setTitle(Optional.ofNullable(track.getTitle()).orElse("Unknown"));
+//                    return track;
+//                } catch (IOException | InvalidAudioFrameException | TagException | ReadOnlyFileException e) {
+//                    throw new RuntimeException(String.format("Failure parsing %s.", mp3.key()), e);
+//                }
+//            }).forEach(retval::add);
+//        }
         return retval;
     }
 
@@ -402,8 +468,8 @@ class PrivateMusicCataloguer {
                                 (name.startsWith("ALBUM~") || name.startsWith("AlbumArt")) && name.endsWith(JPGEXT)).orElse(false)
                 ).collect(Collectors.toList());
         return jpgs.stream().map(jpg -> {
-            try (InputStream s3InputStream = s3Client.getObject(GetObjectRequest.builder().key(jpg.key()).build())) {
-                return newImageMetadata(s3InputStream, buildUrl(URI.create("MP3_Albums").relativize(URI.create(jpg.key())).toString()));
+            try (InputStream s3InputStream = s3Client.getObject(GetObjectRequest.builder().bucket(srcS3Bucket).key(jpg.key()).build())) {
+                return newImageMetadata(s3InputStream, buildUrl(removeRootS3Prefix(jpg.key())));
             } catch (IOException e) {
                 throw new RuntimeException("Failed to access image " + jpg.key() + ".", e);
             }

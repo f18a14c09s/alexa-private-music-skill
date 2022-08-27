@@ -6,6 +6,8 @@ import f18a14c09s.integration.alexa.music.entities.*;
 import f18a14c09s.integration.mp3.TrackMetadata;
 
 import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static f18a14c09s.integration.alexa.data.Language.en;
 import static f18a14c09s.integration.alexa.music.entities.ReleaseType.StudioAlbum;
@@ -17,7 +19,12 @@ public class EntityFactory {
 
     public EntityFactory(Locale defaultLocale, Map<EntityType, Map<List<String>, String>> existingEntities) {
         this.defaultLocale = defaultLocale;
-        this.entityIdsByTypeAndNaturalKey = Optional.ofNullable(existingEntities).orElse(Collections.emptyMap());
+        this.entityIdsByTypeAndNaturalKey = Optional.ofNullable(existingEntities).orElse(Arrays.stream(EntityType.values()).collect(
+                Collectors.toMap(
+                        Function.identity(),
+                        entityType -> new HashMap<>()
+                )
+        ));
     }
 
     public Artist newArtistEntity(String artistName, Art art) {

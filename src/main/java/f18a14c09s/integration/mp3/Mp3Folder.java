@@ -79,4 +79,11 @@ public class Mp3Folder {
                 .forEach(retval::add);
         return retval;
     }
+
+    public Stream<TrackMetadata> recurseMp3s() {
+        return Stream.concat(
+                getMp3s().stream(),
+                getChildren().stream().flatMap(Mp3Folder::recurseMp3s)
+        );
+    }
 }
