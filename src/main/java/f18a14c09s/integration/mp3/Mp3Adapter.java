@@ -10,8 +10,8 @@ import org.jaudiotagger.tag.id3.AbstractID3v2Tag;
 import org.jaudiotagger.tag.id3.ID3v1Tag;
 
 import java.io.*;
-import java.util.*;
-import java.util.function.*;
+import java.util.Optional;
+import java.util.function.Function;
 
 public class Mp3Adapter {
     public TrackMetadata parseMetadata(InputStream mp3Stream) throws
@@ -20,15 +20,19 @@ public class Mp3Adapter {
             TagException,
             ReadOnlyFileException {
         File tempFile = File.createTempFile("track_", ".mp3");
-        try (BufferedInputStream bis = new BufferedInputStream(mp3Stream);
-             FileOutputStream fos = new FileOutputStream(tempFile)) {
-            for (int b = bis.read(); b >= 0; b = bis.read()) {
-                fos.write(b);
-            }
-            fos.flush();
-        }
         tempFile.deleteOnExit();
-        return parseMetadata(tempFile);
+        try {
+            try (BufferedInputStream bis = new BufferedInputStream(mp3Stream);
+                 FileOutputStream fos = new FileOutputStream(tempFile);
+                 BufferedOutputStream bos = new BufferedOutputStream(fos)) {
+                for (int b = bis.read(); b >= 0; b = bis.read()) {
+                    bos.write(b);
+                }
+            }
+            return parseMetadata(tempFile);
+        } finally {
+            tempFile.delete();
+        }
     }
 
     public TrackMetadata parseMetadata(File file) throws

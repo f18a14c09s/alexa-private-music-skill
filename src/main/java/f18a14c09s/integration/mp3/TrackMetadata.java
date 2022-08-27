@@ -15,7 +15,7 @@ public class TrackMetadata {
     private String year;
     private String copyright;
     private String comment;
-    private Path filePath;
+    private String filePath;
     private Long trackNumber;
     private Long lastTrackNumber;
 
