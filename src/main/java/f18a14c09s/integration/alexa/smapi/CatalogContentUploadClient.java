@@ -37,9 +37,6 @@ public class CatalogContentUploadClient {
             String accessToken
     ) {
         this.accessToken = accessToken;
-        jsonMapper.enable(
-                SerializationFeature.INDENT_OUTPUT
-        );
     }
 
     private <R> R readJson(

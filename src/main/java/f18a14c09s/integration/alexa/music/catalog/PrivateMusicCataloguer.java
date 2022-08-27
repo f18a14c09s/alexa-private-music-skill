@@ -15,6 +15,11 @@ import f18a14c09s.integration.mp3.ImageMetadata;
 import f18a14c09s.integration.mp3.Mp3Adapter;
 import f18a14c09s.integration.mp3.Mp3Folder;
 import f18a14c09s.integration.mp3.TrackMetadata;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CommonPrefix;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
+import software.amazon.awssdk.services.s3.model.S3Object;
 import org.jaudiotagger.audio.exceptions.InvalidAudioFrameException;
 import org.jaudiotagger.audio.exceptions.ReadOnlyFileException;
 import org.jaudiotagger.tag.TagException;
@@ -41,6 +46,7 @@ class PrivateMusicCataloguer {
     private boolean writeToDb;
     private File srcDir;
     private File destDir;
+    private String srcS3Bucket;
     private String baseUrl;
     private CatalogDAO dao;
     private EntityFactory entityFactory;
@@ -48,6 +54,7 @@ class PrivateMusicCataloguer {
     private JSONAdapter jsonAdapter;
     private MessageDigest sha256Digester;
     private Base64.Encoder base64Encoder;
+    private S3Client s3Client;
     private Locale en_US;
     private Art defaultArt;
 
@@ -299,18 +306,68 @@ class PrivateMusicCataloguer {
         }
     }
 
-    private Mp3Folder collectTrackInfoRecursively(File dir, int level) throws IOException, NoSuchAlgorithmException {
+    // private Mp3Folder collectTrackInfoRecursively(File dir, int level) throws IOException, NoSuchAlgorithmException {
+    //     List<Mp3Folder> children = new ArrayList<>();
+    //     List<File> subdirs = Optional.ofNullable(dir.listFiles(File::isDirectory))
+    //             .map(Arrays::asList)
+    //             .orElse(Collections.emptyList());
+    //     for (File subdir : subdirs) {
+    //         children.add(collectTrackInfoRecursively(subdir, level + 1));
+    //     }
+    //     return new Mp3Folder(collectTrackMetadata(dir), collectAlbumArt(dir), level, children);
+    // }
+
+    private Mp3Folder collectTrackInfoRecursivelyS3(String s3Prefix, int level) throws IOException, NoSuchAlgorithmException {
         List<Mp3Folder> children = new ArrayList<>();
-        List<File> subdirs = Optional.ofNullable(dir.listFiles(File::isDirectory))
-                .map(Arrays::asList)
-                .orElse(Collections.emptyList());
-        for (File subdir : subdirs) {
-            children.add(collectTrackInfoRecursively(subdir, level + 1));
+        List<CommonPrefix> commonPrefixes = new ArrayList<>();
+        List<S3Object> s3Objects = new ArrayList<>();
+        for(ListObjectsV2Response response : s3Client.listObjectsV2Paginator(
+            ListObjectsV2Request.builder().bucket(
+                srcS3Bucket
+            ).prefix(
+                s3Prefix
+            ).build()
+        )) {
+            commonPrefixes.addAll(response.commonPrefixes());
+            s3Objects.addAll(response.contents());
         }
-        return new Mp3Folder(collectTrackMetadata(dir), collectAlbumArt(dir), level, children);
+        for (CommonPrefix subdir : commonPrefixes) {
+            children.add(collectTrackInfoRecursivelyS3(subdir.prefix(), level + 1));
+        }
+        return new Mp3Folder(collectTrackMetadataS3(s3Prefix, s3Objects), collectAlbumArtS3(s3Objects), level, children);
     }
 
-    private List<TrackMetadata> collectTrackMetadata(File dir) {
+    // private List<TrackMetadata> collectTrackMetadata(File dir) {
+    //     List<TrackMetadata> retval = new ArrayList<>();
+    //     File destFile = new File(destDir,
+    //             srcDir.toPath().relativize(dir.toPath()).toString().replaceAll("[^A-Za-z0-9-_\\.]+", ".") + ".json");
+    //     if (reset || !destFile.exists()) {
+    //         File[] mp3s = dir.listFiles(file -> Optional.ofNullable(file)
+    //                 .filter(File::isFile)
+    //                 .map(File::getName)
+    //                 .map(name -> name.length() >= MP3EXT.length() &&
+    //                         name.substring(name.length() - MP3EXT.length()).equalsIgnoreCase(MP3EXT))
+    //                 .orElse(false));
+    //         if (mp3s != null && mp3s.length >= 1) {
+    //             Arrays.stream(mp3s).map(mp3 -> {
+    //                 Path relativePath = srcDir.toPath().relativize(mp3.toPath());
+    //                 try {
+    //                     TrackMetadata track = mp3Adapter.parseMetadata(mp3);
+    //                     track.setFilePath(relativePath);
+    //                     track.setAuthor(Optional.ofNullable(track.getAuthor()).orElse("Unknown"));
+    //                     track.setAlbum(Optional.ofNullable(track.getAlbum()).orElse("Unknown"));
+    //                     track.setTitle(Optional.ofNullable(track.getTitle()).orElse("Unknown"));
+    //                     return track;
+    //                 } catch (IOException | InvalidAudioFrameException | TagException | ReadOnlyFileException e) {
+    //                     throw new RuntimeException(String.format("Failure parsing %s.", mp3.getAbsolutePath()), e);
+    //                 }
+    //             }).forEach(retval::add);
+    //         }
+    //     }
+    //     return retval;
+    // }
+
+    private List<TrackMetadata> collectTrackMetadataS3(String s3Prefix, List<S3Object> s3Objects) {
         List<TrackMetadata> retval = new ArrayList<>();
         File destFile = new File(destDir,
                 srcDir.toPath().relativize(dir.toPath()).toString().replaceAll("[^A-Za-z0-9-_\\.]+", ".") + ".json");
@@ -349,7 +406,24 @@ class PrivateMusicCataloguer {
         }
     }
 
-    private List<ImageMetadata> collectAlbumArt(File dir) {
+    // private List<ImageMetadata> collectAlbumArt(File dir) {
+    //     Optional<File[]> optionalJpgs = Optional.ofNullable(dir.listFiles(file -> Optional.ofNullable(file)
+    //             .filter(File::isFile)
+    //             .map(File::getName)
+    //             .map(name -> name.length() >= JPGEXT.length() &&
+    //                     name.substring(name.length() - JPGEXT.length()).equalsIgnoreCase(JPGEXT) &&
+    //                     (name.startsWith("ALBUM~") || name.startsWith("AlbumArt")))
+    //             .orElse(false)));
+    //     return optionalJpgs.filter(jpgs -> jpgs.length >= 1).map(jpgs -> Arrays.stream(jpgs).map(jpg -> {
+    //         try (FileInputStream fis = new FileInputStream(jpg)) {
+    //             return newImageMetadata(fis, buildUrl(srcDir.toPath().relativize(jpg.toPath())));
+    //         } catch (IOException e) {
+    //             throw new RuntimeException("Failed to access image " + jpg.getAbsolutePath() + ".", e);
+    //         }
+    //     }).distinct().collect(Collectors.toList())).orElse(null);
+    // }
+
+    private List<ImageMetadata> collectAlbumArtS3(List<S3Object> s3Objects) {
         Optional<File[]> optionalJpgs = Optional.ofNullable(dir.listFiles(file -> Optional.ofNullable(file)
                 .filter(File::isFile)
                 .map(File::getName)
