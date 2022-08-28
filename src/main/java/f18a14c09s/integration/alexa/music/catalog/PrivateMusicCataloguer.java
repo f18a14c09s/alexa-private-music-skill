@@ -38,14 +38,14 @@ import static f18a14c09s.util.CollectionUtil.asArrayList;
 class PrivateMusicCataloguer {
     public static final String MP3EXT = ".mp3";
     public static final String JPGEXT = ".jpg";
-    public static final String ROOT_S3_PREFIX = "MP3_Albums/";
-    //    private boolean reset;
-//    private boolean writeToDisk;
-//    private boolean writeToDb;
-//    private File srcDir;
-    //    private File destDir;
-    private String srcS3Bucket;
+
+    private String sourceS3BucketName;
+    private String sourceS3Prefix;
     private String baseUrl;
+    private String imageBaseUrl;
+    private String destStrStrDynamodbTableName;
+    private String destStrNumDynamodbTableName;
+    private DynamoDBCatalogDAO catalogDAO;
     private CatalogDAO dao;
     private EntityFactory entityFactory;
     private Mp3Adapter mp3Adapter;
@@ -56,19 +56,18 @@ class PrivateMusicCataloguer {
     private Locale en_US;
     private Art defaultArt;
 
-    PrivateMusicCataloguer(File srcDir,
-                           File destDir,
+    PrivateMusicCataloguer(String sourceS3BucketName,
+                           String sourceS3Prefix,
                            String baseUrl,
-                           boolean reset,
                            String imageBaseUrl,
-                           boolean writeToDb,
-                           File srcCatalogDir) throws IOException, NoSuchAlgorithmException {
-        this.srcS3Bucket = "music.francisjohnson.org";
-//        this.destDir = destDir;
+                           String destStrStrDynamodbTableName,
+                           String destStrNumDynamodbTableName) throws IOException, NoSuchAlgorithmException {
+        this.sourceS3BucketName = sourceS3BucketName;
+        this.sourceS3Prefix = sourceS3Prefix;
         this.baseUrl = baseUrl;
-//        this.reset = reset;
-//        this.writeToDisk = (destDir != null);
-//        this.writeToDb = writeToDb;
+        this.imageBaseUrl = imageBaseUrl;
+        this.destStrStrDynamodbTableName = destStrStrDynamodbTableName;
+        this.destStrNumDynamodbTableName = destStrNumDynamodbTableName;
         this.mp3Adapter = new Mp3Adapter();
         this.jsonAdapter = new JSONAdapter();
         this.sha256Digester = MessageDigest.getInstance("SHA-256");
@@ -77,6 +76,7 @@ class PrivateMusicCataloguer {
         this.defaultArt = defaultArtObject(imageBaseUrl);
         this.en_US = Locale.en_US();
         Map<EntityType, Map<List<String>, String>> entityIdsByTypeAndNaturalKey = null;
+        this.catalogDAO = new DynamoDBCatalogDAO();
         this.dao = new CatalogDAO(Hbm2DdlAuto.create);
         dao.save(en_US);
         dao.save(defaultArt);
@@ -125,7 +125,7 @@ class PrivateMusicCataloguer {
     void catalogMusic() throws IOException, NoSuchAlgorithmException {
         // System.out.printf("Locale %s-%s has ID %s.%n", en_US.getLanguage(),
         // en_US.getCountry(), en_US.getId());
-        Mp3Folder rootMp3Folder = collectTrackInfoRecursivelyS3(ROOT_S3_PREFIX, 0);
+        Mp3Folder rootMp3Folder = collectTrackInfoRecursivelyS3(sourceS3Prefix, 0);
         printFolderSummary(rootMp3Folder);
         Map<String, Artist> artists = catalogArtists(rootMp3Folder);
         Map<String, String> artistIdToName = artists.entrySet()
@@ -297,7 +297,7 @@ class PrivateMusicCataloguer {
         List<S3Object> s3Objects = new ArrayList<>();
         for (ListObjectsV2Response response : s3Client.listObjectsV2Paginator(
                 ListObjectsV2Request.builder().bucket(
-                        srcS3Bucket
+                        sourceS3BucketName
                 ).delimiter(
                         "/" // DO NOT forget this!
                 ).prefix(
@@ -363,8 +363,8 @@ class PrivateMusicCataloguer {
     //     return retval;
     // }
 
-    private static String removeRootS3Prefix(String s3PrefixOrKey) {
-        return s3PrefixOrKey.replaceAll("^" + Pattern.quote(ROOT_S3_PREFIX), "");
+    private String removeRootS3Prefix(String s3PrefixOrKey) {
+        return s3PrefixOrKey.replaceAll("^" + Pattern.quote(sourceS3Prefix), "");
     }
 
     private TrackMetadata parseTrackMetadataS3(S3Object s3Object) {
@@ -374,7 +374,7 @@ class PrivateMusicCataloguer {
         );
         try (InputStream s3InputStream = s3Client.getObject(
                 GetObjectRequest.builder().bucket(
-                        srcS3Bucket
+                        sourceS3BucketName
                 ).key(
                         s3Object.key()
                 ).build()
@@ -468,7 +468,7 @@ class PrivateMusicCataloguer {
                                 (name.startsWith("ALBUM~") || name.startsWith("AlbumArt")) && name.endsWith(JPGEXT)).orElse(false)
                 ).collect(Collectors.toList());
         return jpgs.stream().map(jpg -> {
-            try (InputStream s3InputStream = s3Client.getObject(GetObjectRequest.builder().bucket(srcS3Bucket).key(jpg.key()).build())) {
+            try (InputStream s3InputStream = s3Client.getObject(GetObjectRequest.builder().bucket(sourceS3BucketName).key(jpg.key()).build())) {
                 return newImageMetadata(s3InputStream, buildUrl(removeRootS3Prefix(jpg.key())));
             } catch (IOException e) {
                 throw new RuntimeException("Failed to access image " + jpg.key() + ".", e);
