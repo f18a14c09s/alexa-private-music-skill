@@ -6,6 +6,7 @@ import f18a14c09s.integration.alexa.music.entities.*;
 import f18a14c09s.integration.mp3.TrackMetadata;
 
 import java.nio.charset.StandardCharsets;
+import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -32,7 +33,8 @@ public class EntityFactory {
         Artist retval = new Artist();
         retval.setNames(asArrayList(new EntityName(en, artistName)));
         retval.setPopularity(Popularity.unratedWithNoOverrides());
-        retval.setLastUpdatedTime(Calendar.getInstance());
+//        retval.setLastUpdatedTime(Calendar.getInstance());
+        retval.setLastUpdatedTime(ZonedDateTime.now());
         retval.setId(
                 Optional.ofNullable(
                         entityIdsByTypeAndNaturalKey.get(
@@ -58,7 +60,8 @@ public class EntityFactory {
         retval.setNames(asArrayList(new EntityName(en, albumName)));
         retval.setPopularity(Popularity.unratedWithNoOverrides());
         retval.setReleaseType(StudioAlbum.getTitle());
-        retval.setLastUpdatedTime(Calendar.getInstance());
+//        retval.setLastUpdatedTime(Calendar.getInstance());
+        retval.setLastUpdatedTime(ZonedDateTime.now());
         retval.setId(Optional.ofNullable(entityIdsByTypeAndNaturalKey.get(EntityType.ALBUM)
                 .get(asArrayList(artistName, albumName))).orElseGet(() -> UUID.randomUUID().toString()));
         retval.setLocales(asArrayList(defaultLocale));
@@ -75,7 +78,8 @@ public class EntityFactory {
         retval.setNaturalOrder(mp3.getTrackNumber());
         retval.setPopularity(Popularity.unratedWithNoOverrides());
 //        retval.setReleaseType(StudioAlbum.getTitle());
-        retval.setLastUpdatedTime(Calendar.getInstance());
+//        retval.setLastUpdatedTime(Calendar.getInstance());
+        retval.setLastUpdatedTime(ZonedDateTime.now());
         retval.setArtists(asArrayList(artist));
         retval.setAlbums(asArrayList(album));
         retval.setLocales(asArrayList(defaultLocale));
