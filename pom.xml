@@ -192,6 +192,12 @@
             <artifactId>alexa-music-skill-model-4j</artifactId>
             <version>1.1-SNAPSHOT</version>
         </dependency>
+        <!-- https://mvnrepository.com/artifact/com.fasterxml.jackson.datatype/jackson-datatype-jsr310 -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+            <version>2.13.3</version>
+        </dependency>
         <!-- https://mvnrepository.com/artifact/com.googlecode.soundlibs/mp3spi -->
         <dependency>
             <groupId>com.googlecode.soundlibs</groupId>

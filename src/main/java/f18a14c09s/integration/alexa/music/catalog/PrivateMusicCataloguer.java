@@ -222,6 +222,7 @@ class PrivateMusicCataloguer {
         MusicGroupCatalog catalog = new MusicGroupCatalog();
         catalog.setEntities(new ArrayList<>(artists.values()));
         catalog.setLocales(asArrayList(en_US));
+        artists.values().forEach(catalogDAO::save);
         dao.save(catalog);
         return artists;
     }
@@ -245,6 +246,7 @@ class PrivateMusicCataloguer {
         MusicAlbumCatalog catalog = new MusicAlbumCatalog();
         catalog.setEntities(new ArrayList<>(albums.values()));
         catalog.setLocales(asArrayList(en_US));
+        albums.values().forEach(catalogDAO::save);
         dao.save(catalog);
         return albums;
     }

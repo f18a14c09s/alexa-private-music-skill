@@ -1,11 +1,12 @@
 package f18a14c09s.integration.alexa.music.catalog;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import f18a14c09s.integration.alexa.music.catalog.data.*;
 import f18a14c09s.integration.alexa.music.entities.Album;
 import f18a14c09s.integration.alexa.music.entities.Artist;
 import f18a14c09s.integration.alexa.music.entities.BaseEntity;
 import f18a14c09s.integration.alexa.music.entities.Track;
-import lombok.Getter;
-import lombok.Setter;
 import software.amazon.awssdk.enhanced.dynamodb.DynamoDbEnhancedClient;
 import software.amazon.awssdk.enhanced.dynamodb.DynamoDbTable;
 import software.amazon.awssdk.enhanced.dynamodb.Key;
@@ -18,71 +19,6 @@ import java.util.List;
 
 
 public class DynamoDBCatalogDAO {
-    @Getter
-    @Setter
-    public static final class AttributesOnlyCatalog {
-        private Long id;
-        private String type;
-        private Double version;
-        private String defaultUsage;
-    }
-
-    public interface StringPkStringSkDynamoDbItem {
-        String getPk();
-
-        String getSk();
-
-        void setPk(String pk);
-
-        void setSk(String sk);
-    }
-
-    public interface StringPkIntegerSkDynamoDbItem {
-        String getPk();
-
-        Integer getSk();
-
-        void setPk(String pk);
-
-        void setSk(Integer sk);
-    }
-
-    @Getter
-    @Setter
-    public static abstract class AbstractMusicEntityItem<E extends BaseEntity> implements StringPkStringSkDynamoDbItem {
-        private String pk;
-        private String sk;
-        private E entity;
-    }
-
-    public static final class TrackItem extends AbstractMusicEntityItem<Track> {
-    }
-
-    public static final class AlbumItem extends AbstractMusicEntityItem<Album> {
-    }
-
-    public static final class ArtistItem extends AbstractMusicEntityItem<Artist> {
-    }
-
-    @Getter
-    @Setter
-    public static final class ChildTrackItem implements StringPkIntegerSkDynamoDbItem {
-        private String pk;
-        private Integer sk;
-        private String trackId;
-
-        public static String formatPartitionKey(
-                Class<? extends BaseEntity> parentEntityClass,
-                String parentEntityId
-        ) {
-            return String.format(
-                    "MUSICENTITYTYPE=%s,ENTITYID=%s,LISTTYPE=CHILDTRACKS",
-                    parentEntityClass.getSimpleName(),
-                    parentEntityId
-            );
-        }
-    }
-
     private String stringPkStringSkTableName;
     private String stringPkNumericSkTableName;
     private DynamoDbEnhancedClient dynamodbClient;
