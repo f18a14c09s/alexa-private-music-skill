@@ -76,7 +76,10 @@ class PrivateMusicCataloguer {
         this.defaultArt = defaultArtObject(imageBaseUrl);
         this.en_US = Locale.en_US();
         Map<EntityType, Map<List<String>, String>> entityIdsByTypeAndNaturalKey = null;
-        this.catalogDAO = new DynamoDBCatalogDAO();
+        this.catalogDAO = new DynamoDBCatalogDAO(
+                destStrStrDynamodbTableName,
+                destStrNumDynamodbTableName
+        );
         this.dao = new CatalogDAO(Hbm2DdlAuto.create);
         dao.save(en_US);
         dao.save(defaultArt);
@@ -278,6 +281,7 @@ class PrivateMusicCataloguer {
         trackCatalog.setEntities(tracks);
         trackCatalog.setLocales(asArrayList(en_US));
         dao.save(trackCatalog);
+        tracks.forEach(catalogDAO::save);
     }
 
     // private Mp3Folder collectTrackInfoRecursively(File dir, int level) throws IOException, NoSuchAlgorithmException {
@@ -402,6 +406,8 @@ class PrivateMusicCataloguer {
         } catch (InterruptedException e) {
             e.printStackTrace();
             throw new RuntimeException(e);
+        } finally {
+            executor.shutdown();
         }
         for (Future<TrackMetadata> task : tasks) {
             try {

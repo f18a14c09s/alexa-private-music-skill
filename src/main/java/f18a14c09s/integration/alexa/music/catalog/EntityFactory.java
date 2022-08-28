@@ -5,6 +5,7 @@ import f18a14c09s.integration.alexa.music.data.Art;
 import f18a14c09s.integration.alexa.music.entities.*;
 import f18a14c09s.integration.mp3.TrackMetadata;
 
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -80,10 +81,17 @@ public class EntityFactory {
         retval.setLocales(asArrayList(defaultLocale));
         retval.setUrl(url);
         retval.setArt(art);
-        String artistName = artist.getNames().get(0).getValue();
-        String albumName = album.getNames().get(0).getValue();
-        retval.setId(Optional.ofNullable(entityIdsByTypeAndNaturalKey.get(EntityType.TRACK).get(List.of(artistName, albumName, mp3.getTitle())))
-                .orElseGet(() -> UUID.randomUUID().toString()));
+//        String artistName = artist.getNames().get(0).getValue();
+//        String albumName = album.getNames().get(0).getValue();
+        retval.setId(
+                UUID.nameUUIDFromBytes(
+                        String.format(
+                                "MUSIC%sS3KEY%s",
+                                EntityType.TRACK.name(),
+                                url
+                        ).getBytes(StandardCharsets.UTF_8)
+                ).toString()
+        );
         return retval;
     }
 }

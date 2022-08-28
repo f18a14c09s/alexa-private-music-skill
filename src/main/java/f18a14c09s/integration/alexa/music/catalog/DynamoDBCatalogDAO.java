@@ -1,12 +1,9 @@
 package f18a14c09s.integration.alexa.music.catalog;
 
-import f18a14c09s.integration.alexa.data.Country;
-import f18a14c09s.integration.alexa.data.Language;
-import f18a14c09s.integration.alexa.data.Locale;
-import f18a14c09s.integration.alexa.music.catalog.data.AbstractCatalog;
-import f18a14c09s.integration.alexa.music.catalog.data.MusicRecordingCatalog;
-import f18a14c09s.integration.alexa.music.data.Art;
-import f18a14c09s.integration.alexa.music.entities.*;
+import f18a14c09s.integration.alexa.music.entities.Album;
+import f18a14c09s.integration.alexa.music.entities.Artist;
+import f18a14c09s.integration.alexa.music.entities.BaseEntity;
+import f18a14c09s.integration.alexa.music.entities.Track;
 import lombok.Getter;
 import lombok.Setter;
 import software.amazon.awssdk.enhanced.dynamodb.DynamoDbEnhancedClient;
@@ -16,11 +13,8 @@ import software.amazon.awssdk.enhanced.dynamodb.TableSchema;
 import software.amazon.awssdk.enhanced.dynamodb.model.Page;
 import software.amazon.awssdk.enhanced.dynamodb.model.PageIterable;
 import software.amazon.awssdk.enhanced.dynamodb.model.QueryConditional;
-import software.amazon.awssdk.services.dynamodb.model.*;
 
-import java.io.IOException;
-import java.util.*;
-import java.util.function.Supplier;
+import java.util.List;
 
 
 public class DynamoDBCatalogDAO {
@@ -33,33 +27,42 @@ public class DynamoDBCatalogDAO {
         private String defaultUsage;
     }
 
-    public static interface StringPkStringSkDynamoDbItem {
+    public interface StringPkStringSkDynamoDbItem {
         String getPk();
+
         String getSk();
+
         void setPk(String pk);
+
         void setSk(String sk);
     }
 
-    public static interface StringPkIntegerSkDynamoDbItem {
+    public interface StringPkIntegerSkDynamoDbItem {
         String getPk();
+
         Integer getSk();
+
         void setPk(String pk);
+
         void setSk(Integer sk);
     }
 
     @Getter
     @Setter
-    public static abstract class AbstractMusicEntityItem <E extends BaseEntity> implements StringPkStringSkDynamoDbItem {
+    public static abstract class AbstractMusicEntityItem<E extends BaseEntity> implements StringPkStringSkDynamoDbItem {
         private String pk;
         private String sk;
         private E entity;
     }
 
-    public static final class TrackItem extends AbstractMusicEntityItem<Track> {}
+    public static final class TrackItem extends AbstractMusicEntityItem<Track> {
+    }
 
-    public static final class AlbumItem extends AbstractMusicEntityItem<Album> {}
+    public static final class AlbumItem extends AbstractMusicEntityItem<Album> {
+    }
 
-    public static final class ArtistItem extends AbstractMusicEntityItem<Artist> {}
+    public static final class ArtistItem extends AbstractMusicEntityItem<Artist> {
+    }
 
     @Getter
     @Setter
@@ -69,20 +72,29 @@ public class DynamoDBCatalogDAO {
         private String trackId;
 
         public static String formatPartitionKey(
-            Class<? extends BaseEntity> parentEntityClass,
-            String parentEntityId
+                Class<? extends BaseEntity> parentEntityClass,
+                String parentEntityId
         ) {
             return String.format(
-                "MUSICENTITYTYPE=%s,ENTITYID=%s,LISTTYPE=CHILDTRACKS",
-                parentEntityClass.getSimpleName(),
-                parentEntityId
+                    "MUSICENTITYTYPE=%s,ENTITYID=%s,LISTTYPE=CHILDTRACKS",
+                    parentEntityClass.getSimpleName(),
+                    parentEntityId
             );
         }
     }
 
+    private String stringPkStringSkTableName;
+    private String stringPkNumericSkTableName;
     private DynamoDbEnhancedClient dynamodbClient;
 
-    public DynamoDBCatalogDAO() {}
+    public DynamoDBCatalogDAO(
+            String stringPkStringSkTableName,
+            String stringPkNumericSkTableName
+    ) {
+        this.dynamodbClient = DynamoDbEnhancedClient.builder().build();
+        this.stringPkStringSkTableName = stringPkStringSkTableName;
+        this.stringPkNumericSkTableName = stringPkNumericSkTableName;
+    }
 
     public void save(Track musicEntity) {
         saveMusicEntity(musicEntity, new TrackItem(), TrackItem.class);
@@ -97,40 +109,39 @@ public class DynamoDBCatalogDAO {
     }
 
     public void saveChildTrackAssociations(
-        Class<? extends BaseEntity> musicEntityClass,
-        String entityId,
-        List<Track> presortedChildTracks
+            Class<? extends BaseEntity> musicEntityClass,
+            String entityId,
+            List<Track> presortedChildTracks
     ) {
-        for(int i = 0; i < presortedChildTracks.size(); i++) {
+        for (int i = 0; i < presortedChildTracks.size(); i++) {
             ChildTrackItem dynamodbItem = new ChildTrackItem();
             dynamodbItem.setPk(
-                ChildTrackItem.formatPartitionKey(
-                    musicEntityClass,
-                    entityId
-                )
+                    ChildTrackItem.formatPartitionKey(
+                            musicEntityClass,
+                            entityId
+                    )
             );
             dynamodbItem.setSk(i);
             dynamodbItem.setTrackId(presortedChildTracks.get(i).getId());
-            // TODO: This won't work because it's the wrong table:
-            saveEntity(dynamodbItem, ChildTrackItem.class);
+            saveEntityWithNumericSortKey(dynamodbItem, ChildTrackItem.class);
         }
     }
 
     private static String formatMusicEntityPartitionKey(
-        Class<? extends BaseEntity> clazz
+            Class<? extends BaseEntity> clazz
     ) {
         return String.format(
-            "MUSICENTITYTYPE=%s",
-            clazz.getSimpleName()
+                "MUSICENTITYTYPE=%s",
+                clazz.getSimpleName()
         );
     }
 
     private static String formatMusicEntitySortKey(
-        String id
+            String id
     ) {
         return String.format(
-            "ENTITYID=%s,LISTTYPE=MUSICENTITIES",
-            id
+                "ENTITYID=%s,LISTTYPE=MUSICENTITIES",
+                id
         );
     }
 
@@ -138,148 +149,155 @@ public class DynamoDBCatalogDAO {
         dynamoDbItem.setEntity(entity);
         dynamoDbItem.setPk(formatMusicEntityPartitionKey(entity.getClass()));
         dynamoDbItem.setSk(formatMusicEntitySortKey(entity.getId()));
-        saveEntity(dynamoDbItem, clazz);
+        saveEntityWithStringSortKey(dynamoDbItem, clazz);
     }
 
-    private <E extends Object> void saveEntity(E entity, Class<E> clazz) {
+    private <E extends Object> void saveEntityWithStringSortKey(E entity, Class<E> clazz) {
         DynamoDbTable<E> catalogTableWithEntitySpecificSchema = dynamodbClient.table(
-            "StringPkStringSk", TableSchema.fromBean(clazz)
+                stringPkStringSkTableName, TableSchema.fromBean(clazz)
+        );
+        catalogTableWithEntitySpecificSchema.putItem(entity);
+    }
+
+    private <E extends Object> void saveEntityWithNumericSortKey(E entity, Class<E> clazz) {
+        DynamoDbTable<E> catalogTableWithEntitySpecificSchema = dynamodbClient.table(
+                stringPkNumericSkTableName, TableSchema.fromBean(clazz)
         );
         catalogTableWithEntitySpecificSchema.putItem(entity);
     }
 
     public Track findTrack(String id) {
         return findMusicEntity(
-            Track.class, id, new TrackItem(), TrackItem.class
+                Track.class, id, new TrackItem(), TrackItem.class
         );
     }
 
     public Album findAlbum(String id) {
         return findMusicEntity(
-            Album.class, id, new AlbumItem(), AlbumItem.class
+                Album.class, id, new AlbumItem(), AlbumItem.class
         );
     }
 
     public Artist findArtist(String id) {
         return findMusicEntity(
-            Artist.class, id, new ArtistItem(), ArtistItem.class
+                Artist.class, id, new ArtistItem(), ArtistItem.class
         );
     }
 
     private <E extends BaseEntity, DE extends AbstractMusicEntityItem<E>> E findMusicEntity(
-        Class<E> clazz, String id, DE keyHolder, Class<DE> dynamodbItemClass
+            Class<E> clazz, String id, DE keyHolder, Class<DE> dynamodbItemClass
     ) {
         DynamoDbTable<DE> catalogTableWithEntitySpecificSchema = dynamodbClient.table(
-            "StringPkStringSk", TableSchema.fromBean(dynamodbItemClass)
+                stringPkStringSkTableName, TableSchema.fromBean(dynamodbItemClass)
         );
         keyHolder.setPk(formatMusicEntityPartitionKey(clazz));
         keyHolder.setSk(formatMusicEntitySortKey(id));
         DE actualItem = catalogTableWithEntitySpecificSchema.getItem(
-            keyHolder
+                keyHolder
         );
         return actualItem == null ? null : actualItem.getEntity();
     }
 
     public Track getFirstChildTrack(
-        Class<? extends BaseEntity> parentEntityClass,
-        String parentEntityId
+            Class<? extends BaseEntity> parentEntityClass,
+            String parentEntityId
     ) {
         PageIterable<ChildTrackItem> childTracks = iterateChildTracks(
-            parentEntityClass, parentEntityId
+                parentEntityClass, parentEntityId
         );
         ChildTrackItem firstChildItem = childTracks.stream().limit(
-            1
+                1
         ).map(
-            Page::items
+                Page::items
         ).flatMap(
-            List::stream
+                List::stream
         ).findFirst().orElse(null);
-        if(firstChildItem == null) {
+        if (firstChildItem == null) {
             return null;
         }
         return findTrack(
-            firstChildItem.getTrackId()
+                firstChildItem.getTrackId()
         );
     }
 
     public Track getPreviousChildTrack(
-        Class<? extends BaseEntity> parentEntityClass,
-        String parentEntityId,
-        String currentTrackId
+            Class<? extends BaseEntity> parentEntityClass,
+            String parentEntityId,
+            String currentTrackId
     ) {
         PageIterable<ChildTrackItem> childTracks = iterateChildTracks(
-            parentEntityClass, parentEntityId
+                parentEntityClass, parentEntityId
         );
         boolean currentTrackFound = false;
         ChildTrackItem previousChildItem = null;
-        for(Page<ChildTrackItem> page : childTracks) {
-            for(ChildTrackItem childTrackItem : page.items()) {
-                if(childTrackItem.getTrackId().equals(currentTrackId)) {
+        for (Page<ChildTrackItem> page : childTracks) {
+            for (ChildTrackItem childTrackItem : page.items()) {
+                if (childTrackItem.getTrackId().equals(currentTrackId)) {
                     currentTrackFound = true;
                     break;
                 }
                 previousChildItem = childTrackItem;
             }
-            if(currentTrackFound) {
+            if (currentTrackFound) {
                 break;
             }
         }
-        if(!currentTrackFound) {
+        if (!currentTrackFound) {
             return null;
         }
         return findTrack(
-            previousChildItem.getTrackId()
+                previousChildItem.getTrackId()
         );
     }
 
     public Track getNextChildTrack(
-        Class<? extends BaseEntity> parentEntityClass,
-        String parentEntityId,
-        String currentTrackId
+            Class<? extends BaseEntity> parentEntityClass,
+            String parentEntityId,
+            String currentTrackId
     ) {
         PageIterable<ChildTrackItem> childTracks = iterateChildTracks(
-            parentEntityClass, parentEntityId
+                parentEntityClass, parentEntityId
         );
         boolean currentTrackFound = false;
         ChildTrackItem nextChildItem = null;
-        for(Page<ChildTrackItem> page : childTracks) {
-            for(ChildTrackItem childTrackItem : page.items()) {
-                if(currentTrackFound) {
+        for (Page<ChildTrackItem> page : childTracks) {
+            for (ChildTrackItem childTrackItem : page.items()) {
+                if (currentTrackFound) {
                     nextChildItem = childTrackItem;
                     break;
-                } else if(childTrackItem.getTrackId().equals(currentTrackId)) {
+                } else if (childTrackItem.getTrackId().equals(currentTrackId)) {
                     currentTrackFound = true;
                 }
             }
-            if(nextChildItem != null) {
+            if (nextChildItem != null) {
                 break;
             }
         }
-        if(nextChildItem == null) {
+        if (nextChildItem == null) {
             return null;
         }
         return findTrack(
-            nextChildItem.getTrackId()
+                nextChildItem.getTrackId()
         );
     }
 
     private PageIterable<ChildTrackItem> iterateChildTracks(
-        Class<? extends BaseEntity> parentEntityClass,
-        String parentEntityId
+            Class<? extends BaseEntity> parentEntityClass,
+            String parentEntityId
     ) {
         DynamoDbTable<ChildTrackItem> catalogTableWithEntitySpecificSchema = dynamodbClient.table(
-            "StringPkIntegerSk", TableSchema.fromBean(ChildTrackItem.class)
+                stringPkNumericSkTableName, TableSchema.fromBean(ChildTrackItem.class)
         );
         String partitionKey = ChildTrackItem.formatPartitionKey(
-            parentEntityClass,
-            parentEntityId
+                parentEntityClass,
+                parentEntityId
         );
         return catalogTableWithEntitySpecificSchema.query(
-            QueryConditional.keyEqualTo(
-                Key.builder().partitionValue(
-                    partitionKey
-                ).build()
-            )
+                QueryConditional.keyEqualTo(
+                        Key.builder().partitionValue(
+                                partitionKey
+                        ).build()
+                )
         );
     }
 

@@ -2,7 +2,6 @@ package f18a14c09s.integration.alexa.music.catalog;
 
 import lombok.Getter;
 
-import java.io.File;
 import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
@@ -57,6 +56,7 @@ public class PrivateMusicCataloguerCLI {
     private static PrivateMusicCataloguer newCataloguer(Map<CommandLineArgument, List<Object>> args) throws
             IOException,
             NoSuchAlgorithmException {
+        args.entrySet().forEach(arg -> System.out.printf("%s: %s%n", arg.getKey().longArgumentName, arg.getValue()));
         List<String> validationErrors = new ArrayList<>();
         for (CommandLineArgument requiredArg :
                 Set.of(
@@ -75,7 +75,7 @@ public class PrivateMusicCataloguerCLI {
                 args.get(CommandLineArgument.SOURCE_S3_BUCKET_NAME)
         ).map(argValues -> argValues.get(0)).map(String.class::cast).orElse(null);
         String sourceS3Prefix = Optional.ofNullable(
-                args.get(CommandLineArgument.SOURCE_S3_BUCKET_NAME)
+                args.get(CommandLineArgument.SOURCE_S3_PREFIX)
         ).map(argValues -> argValues.get(0)).map(String.class::cast).orElse(null);
         String baseUrl = Optional.ofNullable(
                 args.get(CommandLineArgument.MUSIC_BASE_URL)
@@ -106,7 +106,7 @@ public class PrivateMusicCataloguerCLI {
         Map<String, CommandLineArgument> validCommandLineArguments = Arrays.stream(CommandLineArgument.values()).collect(Collectors.toMap(CommandLineArgument::getLongArgumentName, Function.identity()));
         Map<CommandLineArgument, List<Object>> retval = new HashMap<>();
         for (int i = 0; args != null && i < args.length; ) {
-            String argName = args[i];
+            String argName = args[i++];
             CommandLineArgument arg = validCommandLineArguments.get(argName);
             if (arg == null) {
                 throw new IllegalArgumentException(String.format("Argument %s not recognized.", argName));
