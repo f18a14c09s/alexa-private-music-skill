@@ -325,14 +325,14 @@ class PrivateMusicCataloguer {
 
     private TrackMetadata parseTrackMetadataS3(S3Object s3Object) {
         String filePath = removeRootS3Prefix(s3Object.key());
-//        TrackMetadata trackMetadata = catalogDAO.findTrackMetadata(filePath);
-//        if(trackMetadata != null) {
-//            System.out.printf(
-//                    "Track metadata found in DynamoDB for S3 object %s.%n",
-//                    s3Object.key()
-//            );
-//            return trackMetadata;
-//        }
+        TrackMetadata trackMetadata = catalogDAO.findTrackMetadata(filePath);
+        if (trackMetadata != null) {
+            System.out.printf(
+                    "Track metadata found in DynamoDB for S3 object %s.%n",
+                    s3Object.key()
+            );
+            return trackMetadata;
+        }
         System.out.printf(
                 "Retrieving S3 object %s.%n",
                 s3Object.key()
@@ -359,10 +359,14 @@ class PrivateMusicCataloguer {
 
     private List<TrackMetadata> collectTrackMetadataS3(List<S3Object> s3Objects) {
         List<TrackMetadata> trackMetadataList = new ArrayList<>();
-        List<S3Object> mp3s = s3Objects.stream().filter(s3Object -> s3Object.key().toLowerCase().endsWith(MP3EXT)).collect(Collectors.toList());
+        List<S3Object> mp3s = s3Objects.stream()
+                .filter(s3Object -> s3Object.key().toLowerCase().endsWith(MP3EXT))
+                .collect(Collectors.toList());
         ExecutorService executor = Executors.newFixedThreadPool(10);
         try {
-            List<Future<TrackMetadata>> tasks = executor.invokeAll(mp3s.stream().<Callable<TrackMetadata>>map(s3Object -> (() -> parseTrackMetadataS3(s3Object))).collect(Collectors.toList()));
+            List<Future<TrackMetadata>> tasks = executor.invokeAll(mp3s.stream()
+                    .<Callable<TrackMetadata>>map(s3Object -> (() -> parseTrackMetadataS3(s3Object)))
+                    .collect(Collectors.toList()));
             for (Future<TrackMetadata> task : tasks) {
                 trackMetadataList.add(task.get());
             }
@@ -386,11 +390,17 @@ class PrivateMusicCataloguer {
     private List<ImageMetadata> collectAlbumArtS3(List<S3Object> s3Objects) {
         List<S3Object> jpgs = s3Objects.stream()
                 .filter(
-                        s3Object -> Arrays.stream(s3Object.key().toLowerCase().split("/")).reduce((x, y) -> y).map(name ->
-                                (name.startsWith("ALBUM~") || name.startsWith("AlbumArt")) && name.endsWith(JPGEXT)).orElse(false)
+                        s3Object -> Arrays.stream(s3Object.key().toLowerCase().split("/"))
+                                .reduce((x, y) -> y)
+                                .map(name ->
+                                        (name.startsWith("ALBUM~") || name.startsWith("AlbumArt")) && name.endsWith(JPGEXT))
+                                .orElse(false)
                 ).collect(Collectors.toList());
         return jpgs.stream().map(jpg -> {
-            try (InputStream s3InputStream = s3Client.getObject(GetObjectRequest.builder().bucket(sourceS3BucketName).key(jpg.key()).build())) {
+            try (InputStream s3InputStream = s3Client.getObject(GetObjectRequest.builder()
+                    .bucket(sourceS3BucketName)
+                    .key(jpg.key())
+                    .build())) {
                 return newImageMetadata(s3InputStream, buildUrl(removeRootS3Prefix(jpg.key())));
             } catch (IOException e) {
                 throw new RuntimeException("Failed to access image " + jpg.key() + ".", e);

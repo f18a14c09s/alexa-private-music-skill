@@ -56,11 +56,16 @@ public class Mp3Adapter {
         ).filter(Objects::nonNull).collect(Collectors.toList())) {
             AbstractID3Tag id3Tag = (AbstractID3Tag) tag;
             for (FieldKey fieldKey : List.of(FieldKey.ARTIST, FieldKey.ALBUM_ARTIST)) {
-                for (String artistName : Optional.of(fieldKey).map(tag::getFields).stream().flatMap(List::stream).filter(TagTextField.class::isInstance).map(TagTextField.class::cast).filter(Predicate.not(TagField::isEmpty)).map(TagTextField::getContent).filter(Predicate.not(String::isEmpty)).collect(Collectors.toList())) {
-                    System.out.printf(
-                            "ID3 Artist: %s%n",
-                            artistName
-                    );
+                for (String artistName : Optional.of(fieldKey)
+                        .map(tag::getFields)
+                        .stream()
+                        .flatMap(List::stream)
+                        .filter(TagTextField.class::isInstance)
+                        .map(TagTextField.class::cast)
+                        .filter(Predicate.not(TagField::isEmpty))
+                        .map(TagTextField::getContent)
+                        .filter(Predicate.not(String::isEmpty))
+                        .collect(Collectors.toList())) {
                     distinctArtistNames.computeIfAbsent(
                             artistName,
                             mapKey -> new HashSet<>()
