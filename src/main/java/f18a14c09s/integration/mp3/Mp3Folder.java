@@ -62,20 +62,18 @@ public class Mp3Folder {
 
     public Set<AlbumKey> getUniqueAlbumNames() {
         Set<AlbumKey> retval = new HashSet<>();
-        Optional.ofNullable(getMp3s())
-                .map(Collection::stream)
-                .orElse(Stream.empty())
-                .map(track -> new AlbumKey(track.getAuthor(), track.getAlbum()))
+        Optional.ofNullable(getMp3s()).stream().flatMap(Collection::stream)
+                .flatMap(trackMetadata -> trackMetadata.getDistinctArtistNames().keySet().stream().map(
+                        artistName -> new AlbumKey(artistName, trackMetadata.getAlbum())
+                ))
                 .forEach(retval::add);
         return retval;
     }
 
     public Set<String> getUniqueArtistNames() {
         Set<String> retval = new HashSet<>();
-        Optional.ofNullable(getMp3s())
-                .map(Collection::stream)
-                .orElse(Stream.empty())
-                .map(TrackMetadata::getAuthor)
+        Optional.ofNullable(getMp3s()).stream().flatMap(Collection::stream)
+                .flatMap(trackMetadata -> trackMetadata.getDistinctArtistNames().keySet().stream())
                 .forEach(retval::add);
         return retval;
     }

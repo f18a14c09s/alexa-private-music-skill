@@ -3,10 +3,8 @@ package f18a14c09s.integration.alexa.music.catalog;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import f18a14c09s.integration.alexa.music.catalog.data.*;
-import f18a14c09s.integration.alexa.music.entities.Album;
-import f18a14c09s.integration.alexa.music.entities.Artist;
-import f18a14c09s.integration.alexa.music.entities.BaseEntity;
-import f18a14c09s.integration.alexa.music.entities.Track;
+import f18a14c09s.integration.alexa.music.entities.*;
+import f18a14c09s.integration.mp3.TrackMetadata;
 import software.amazon.awssdk.enhanced.dynamodb.DynamoDbEnhancedClient;
 import software.amazon.awssdk.enhanced.dynamodb.DynamoDbTable;
 import software.amazon.awssdk.enhanced.dynamodb.Key;
@@ -44,6 +42,19 @@ public class DynamoDBCatalogDAO {
         saveMusicEntity(musicEntity, new ArtistItem(), ArtistItem.class);
     }
 
+    public void save(TrackMetadata trackMetadata) {
+        TrackMetadataItem dynamodbItem = new TrackMetadataItem();
+        dynamodbItem.setPk(TrackMetadataItem.formatPartitionKey());
+        dynamodbItem.setSk(TrackMetadataItem.formatSortKey(
+                trackMetadata.getFilePath()
+        ));
+        dynamodbItem.setData(trackMetadata);
+        saveEntityWithStringSortKey(
+                dynamodbItem,
+                TrackMetadataItem.class
+        );
+    }
+
     public void saveChildTrackAssociations(
             Class<? extends BaseEntity> musicEntityClass,
             String entityId,
@@ -63,28 +74,10 @@ public class DynamoDBCatalogDAO {
         }
     }
 
-    private static String formatMusicEntityPartitionKey(
-            Class<? extends BaseEntity> clazz
-    ) {
-        return String.format(
-                "MUSICENTITYTYPE=%s",
-                clazz.getSimpleName()
-        );
-    }
-
-    private static String formatMusicEntitySortKey(
-            String id
-    ) {
-        return String.format(
-                "ENTITYID=%s,LISTTYPE=MUSICENTITIES",
-                id
-        );
-    }
-
     private <E extends BaseEntity, DE extends AbstractMusicEntityItem<E>> void saveMusicEntity(E entity, DE dynamoDbItem, Class<DE> clazz) {
         dynamoDbItem.setEntity(entity);
-        dynamoDbItem.setPk(formatMusicEntityPartitionKey(entity.getClass()));
-        dynamoDbItem.setSk(formatMusicEntitySortKey(entity.getId()));
+        dynamoDbItem.setPk(AbstractMusicEntityItem.formatPartitionKey(entity.getClass()));
+        dynamoDbItem.setSk(AbstractMusicEntityItem.formatSortKey(entity.getId()));
         saveEntityWithStringSortKey(dynamoDbItem, clazz);
     }
 
@@ -126,8 +119,8 @@ public class DynamoDBCatalogDAO {
         DynamoDbTable<DE> catalogTableWithEntitySpecificSchema = dynamodbClient.table(
                 stringPkStringSkTableName, TableSchema.fromBean(dynamodbItemClass)
         );
-        keyHolder.setPk(formatMusicEntityPartitionKey(clazz));
-        keyHolder.setSk(formatMusicEntitySortKey(id));
+        keyHolder.setPk(AbstractMusicEntityItem.formatPartitionKey(clazz));
+        keyHolder.setSk(AbstractMusicEntityItem.formatSortKey(id));
         DE actualItem = catalogTableWithEntitySpecificSchema.getItem(
                 keyHolder
         );
@@ -235,6 +228,19 @@ public class DynamoDBCatalogDAO {
                         ).build()
                 )
         );
+    }
+
+    public TrackMetadata findTrackMetadata(String path) {
+        DynamoDbTable<TrackMetadataItem> catalogTableWithEntitySpecificSchema = dynamodbClient.table(
+                stringPkStringSkTableName, TableSchema.fromBean(TrackMetadataItem.class)
+        );
+        TrackMetadataItem keyHolder = new TrackMetadataItem();
+        keyHolder.setPk(TrackMetadataItem.formatPartitionKey());
+        keyHolder.setSk(TrackMetadataItem.formatSortKey(path));
+        TrackMetadataItem actualItem = catalogTableWithEntitySpecificSchema.getItem(
+                keyHolder
+        );
+        return actualItem == null ? null : actualItem.getData();
     }
 
     // GetPlayableContent:

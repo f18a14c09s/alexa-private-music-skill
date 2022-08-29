@@ -42,9 +42,9 @@ class PrivateMusicCataloguer {
     private String sourceS3BucketName;
     private String sourceS3Prefix;
     private String baseUrl;
-    private String imageBaseUrl;
-    private String destStrStrDynamodbTableName;
-    private String destStrNumDynamodbTableName;
+    //    private String imageBaseUrl;
+//    private String destStrStrDynamodbTableName;
+//    private String destStrNumDynamodbTableName;
     private DynamoDBCatalogDAO catalogDAO;
     private CatalogDAO dao;
     private EntityFactory entityFactory;
@@ -65,9 +65,9 @@ class PrivateMusicCataloguer {
         this.sourceS3BucketName = sourceS3BucketName;
         this.sourceS3Prefix = sourceS3Prefix;
         this.baseUrl = baseUrl;
-        this.imageBaseUrl = imageBaseUrl;
-        this.destStrStrDynamodbTableName = destStrStrDynamodbTableName;
-        this.destStrNumDynamodbTableName = destStrNumDynamodbTableName;
+//        this.imageBaseUrl = imageBaseUrl;
+//        this.destStrStrDynamodbTableName = destStrStrDynamodbTableName;
+//        this.destStrNumDynamodbTableName = destStrNumDynamodbTableName;
         this.mp3Adapter = new Mp3Adapter();
         this.jsonAdapter = new JSONAdapter();
         this.sha256Digester = MessageDigest.getInstance("SHA-256");
@@ -261,10 +261,11 @@ class PrivateMusicCataloguer {
             Mp3Folder folder = mp3Folders.remove(0);
             mp3Folders.addAll(folder.getChildren());
             for (TrackMetadata metadata : folder.getMp3s()) {
+                String author = metadata.getDistinctArtistNames().keySet().stream().findAny().orElse("Unknown");
                 Track trackEntity = entityFactory.newTrackEntity(metadata,
                         buildUrl(metadata.getFilePath()),
-                        artists.get(metadata.getAuthor()),
-                        albums.get(asArrayList(metadata.getAuthor(), metadata.getAlbum())),
+                        artists.get(author),
+                        albums.get(asArrayList(author, metadata.getAlbum())),
                         Optional.ofNullable(folder.getArt()).orElse(defaultArt));
                 if (trackUrlsById.containsKey(trackEntity.getId())) {
                     System.out.printf(
@@ -286,17 +287,6 @@ class PrivateMusicCataloguer {
         tracks.forEach(catalogDAO::save);
     }
 
-    // private Mp3Folder collectTrackInfoRecursively(File dir, int level) throws IOException, NoSuchAlgorithmException {
-    //     List<Mp3Folder> children = new ArrayList<>();
-    //     List<File> subdirs = Optional.ofNullable(dir.listFiles(File::isDirectory))
-    //             .map(Arrays::asList)
-    //             .orElse(Collections.emptyList());
-    //     for (File subdir : subdirs) {
-    //         children.add(collectTrackInfoRecursively(subdir, level + 1));
-    //     }
-    //     return new Mp3Folder(collectTrackMetadata(dir), collectAlbumArt(dir), level, children);
-    // }
-
     private Mp3Folder collectTrackInfoRecursivelyS3(String s3Prefix, int level) {
         List<Mp3Folder> children = new ArrayList<>();
         List<CommonPrefix> commonPrefixes = new ArrayList<>();
@@ -314,12 +304,6 @@ class PrivateMusicCataloguer {
             s3Objects.addAll(response.contents());
         }
         List<TrackMetadata> mp3s = collectTrackMetadataS3(s3Objects);
-        // TODO: Remove this:
-        System.out.printf(
-                "Found %s MP3s at S3 prefix %s.%n",
-                mp3s.size(),
-                s3Prefix
-        );
         if (!mp3s.isEmpty()) {
             commonPrefixes.clear();
         }
@@ -331,49 +315,24 @@ class PrivateMusicCataloguer {
                     child.recurseMp3s().count(),
                     subdir
             );
-            // TODO: Remove this:
-            if (child.recurseMp3s().findAny().isPresent()) {
-                break;
-            }
         }
         return new Mp3Folder(mp3s, collectAlbumArtS3(s3Objects), level, children);
     }
-
-    // private List<TrackMetadata> collectTrackMetadata(File dir) {
-    //     List<TrackMetadata> retval = new ArrayList<>();
-    //     File destFile = new File(destDir,
-    //             srcDir.toPath().relativize(dir.toPath()).toString().replaceAll("[^A-Za-z0-9-_\\.]+", ".") + ".json");
-    //     if (reset || !destFile.exists()) {
-    //         File[] mp3s = dir.listFiles(file -> Optional.ofNullable(file)
-    //                 .filter(File::isFile)
-    //                 .map(File::getName)
-    //                 .map(name -> name.length() >= MP3EXT.length() &&
-    //                         name.substring(name.length() - MP3EXT.length()).equalsIgnoreCase(MP3EXT))
-    //                 .orElse(false));
-    //         if (mp3s != null && mp3s.length >= 1) {
-    //             Arrays.stream(mp3s).map(mp3 -> {
-    //                 Path relativePath = srcDir.toPath().relativize(mp3.toPath());
-    //                 try {
-    //                     TrackMetadata track = mp3Adapter.parseMetadata(mp3);
-    //                     track.setFilePath(relativePath);
-    //                     track.setAuthor(Optional.ofNullable(track.getAuthor()).orElse("Unknown"));
-    //                     track.setAlbum(Optional.ofNullable(track.getAlbum()).orElse("Unknown"));
-    //                     track.setTitle(Optional.ofNullable(track.getTitle()).orElse("Unknown"));
-    //                     return track;
-    //                 } catch (IOException | InvalidAudioFrameException | TagException | ReadOnlyFileException e) {
-    //                     throw new RuntimeException(String.format("Failure parsing %s.", mp3.getAbsolutePath()), e);
-    //                 }
-    //             }).forEach(retval::add);
-    //         }
-    //     }
-    //     return retval;
-    // }
 
     private String removeRootS3Prefix(String s3PrefixOrKey) {
         return s3PrefixOrKey.replaceAll("^" + Pattern.quote(sourceS3Prefix), "");
     }
 
     private TrackMetadata parseTrackMetadataS3(S3Object s3Object) {
+        String filePath = removeRootS3Prefix(s3Object.key());
+//        TrackMetadata trackMetadata = catalogDAO.findTrackMetadata(filePath);
+//        if(trackMetadata != null) {
+//            System.out.printf(
+//                    "Track metadata found in DynamoDB for S3 object %s.%n",
+//                    s3Object.key()
+//            );
+//            return trackMetadata;
+//        }
         System.out.printf(
                 "Retrieving S3 object %s.%n",
                 s3Object.key()
@@ -388,8 +347,8 @@ class PrivateMusicCataloguer {
             TrackMetadata track = mp3Adapter.parseMetadata(
                     s3InputStream
             );
-            track.setFilePath(removeRootS3Prefix(s3Object.key()));
-            track.setAuthor(Optional.ofNullable(track.getAuthor()).orElse("Unknown"));
+            track.setFilePath(filePath);
+//            track.setAuthor(Optional.ofNullable(track.getAuthor()).orElse("Unknown"));
             track.setAlbum(Optional.ofNullable(track.getAlbum()).orElse("Unknown"));
             track.setTitle(Optional.ofNullable(track.getTitle()).orElse("Unknown"));
             return track;
@@ -399,75 +358,30 @@ class PrivateMusicCataloguer {
     }
 
     private List<TrackMetadata> collectTrackMetadataS3(List<S3Object> s3Objects) {
-        List<TrackMetadata> retval = new ArrayList<>();
+        List<TrackMetadata> trackMetadataList = new ArrayList<>();
         List<S3Object> mp3s = s3Objects.stream().filter(s3Object -> s3Object.key().toLowerCase().endsWith(MP3EXT)).collect(Collectors.toList());
         ExecutorService executor = Executors.newFixedThreadPool(10);
-        List<Future<TrackMetadata>> tasks;
         try {
-            tasks = executor.invokeAll(mp3s.stream().<Callable<TrackMetadata>>map(s3Object -> (() -> parseTrackMetadataS3(s3Object))).collect(Collectors.toList()));
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+            List<Future<TrackMetadata>> tasks = executor.invokeAll(mp3s.stream().<Callable<TrackMetadata>>map(s3Object -> (() -> parseTrackMetadataS3(s3Object))).collect(Collectors.toList()));
+            for (Future<TrackMetadata> task : tasks) {
+                trackMetadataList.add(task.get());
+            }
+            List<Future<?>> persistenceTasks = new ArrayList<>();
+            for (TrackMetadata trackMetadata : trackMetadataList) {
+                persistenceTasks.add(executor.submit(
+                        () -> catalogDAO.save(trackMetadata)
+                ));
+            }
+            for (Future<?> persistenceTask : persistenceTasks) {
+                persistenceTask.get();
+            }
+        } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
         } finally {
             executor.shutdown();
         }
-        for (Future<TrackMetadata> task : tasks) {
-            try {
-                retval.add(task.get());
-            } catch (InterruptedException | ExecutionException e) {
-                e.printStackTrace();
-            }
-        }
-//        if (mp3s.size() >= 1) {
-//            mp3s.stream().map(mp3 -> {
-//                try (InputStream s3InputStream = s3Client.getObject(
-//                        GetObjectRequest.builder().bucket(
-//                                srcS3Bucket
-//                        ).key(
-//                                mp3.key()
-//                        ).build()
-//                )) {
-//                    TrackMetadata track = mp3Adapter.parseMetadata(
-//                            s3InputStream
-//                    );
-//                    track.setFilePath(removeRootS3Prefix(mp3.key()));
-//                    track.setAuthor(Optional.ofNullable(track.getAuthor()).orElse("Unknown"));
-//                    track.setAlbum(Optional.ofNullable(track.getAlbum()).orElse("Unknown"));
-//                    track.setTitle(Optional.ofNullable(track.getTitle()).orElse("Unknown"));
-//                    return track;
-//                } catch (IOException | InvalidAudioFrameException | TagException | ReadOnlyFileException e) {
-//                    throw new RuntimeException(String.format("Failure parsing %s.", mp3.key()), e);
-//                }
-//            }).forEach(retval::add);
-//        }
-        return retval;
+        return trackMetadataList;
     }
-
-//    private void writeToDisk(AbstractCatalog catalog, File destFile) throws IOException {
-//        if (writeToDisk) {
-//            System.out.printf("Writing to %s.%n", destFile.getAbsolutePath());
-//            try (FileWriter fw = new FileWriter(destFile)) {
-//                jsonAdapter.writeValue(fw, catalog);
-//            }
-//        }
-//    }
-
-    // private List<ImageMetadata> collectAlbumArt(File dir) {
-    //     Optional<File[]> optionalJpgs = Optional.ofNullable(dir.listFiles(file -> Optional.ofNullable(file)
-    //             .filter(File::isFile)
-    //             .map(File::getName)
-    //             .map(name -> name.length() >= JPGEXT.length() &&
-    //                     name.substring(name.length() - JPGEXT.length()).equalsIgnoreCase(JPGEXT) &&
-    //                     (name.startsWith("ALBUM~") || name.startsWith("AlbumArt")))
-    //             .orElse(false)));
-    //     return optionalJpgs.filter(jpgs -> jpgs.length >= 1).map(jpgs -> Arrays.stream(jpgs).map(jpg -> {
-    //         try (FileInputStream fis = new FileInputStream(jpg)) {
-    //             return newImageMetadata(fis, buildUrl(srcDir.toPath().relativize(jpg.toPath())));
-    //         } catch (IOException e) {
-    //             throw new RuntimeException("Failed to access image " + jpg.getAbsolutePath() + ".", e);
-    //         }
-    //     }).distinct().collect(Collectors.toList())).orElse(null);
-    // }
 
     private List<ImageMetadata> collectAlbumArtS3(List<S3Object> s3Objects) {
         List<S3Object> jpgs = s3Objects.stream()
@@ -508,17 +422,6 @@ class PrivateMusicCataloguer {
         }
         return new ImageMetadata(url, sha256Hash, width, height);
     }
-
-//    private String buildUrl(Path relativePath) {
-//        StringBuilder relativePathString = new StringBuilder();
-//        for (int i = 0; i < relativePath.getNameCount(); i++) {
-//            relativePathString.append((i == 0 ? "" : "/") +
-//                    UriUtils.encodePathSegment(relativePath.getName(i).toString(), StandardCharsets.UTF_8));
-//        }
-//        return String.format("%s/%s",
-//                baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.lastIndexOf("/")) : baseUrl,
-//                relativePathString.toString());
-//    }
 
     private String buildUrl(String relativePath) {
         return String.format("%s/%s",

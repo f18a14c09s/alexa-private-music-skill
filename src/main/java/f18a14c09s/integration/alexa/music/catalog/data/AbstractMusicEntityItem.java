@@ -23,4 +23,22 @@ public abstract class AbstractMusicEntityItem<E extends BaseEntity> implements S
     public abstract E getEntity();
 
     public abstract void setEntity(E entity);
+
+    public static String formatPartitionKey(
+            Class<? extends BaseEntity> clazz
+    ) {
+        return String.format(
+                "MUSICENTITYTYPE=%s",
+                clazz.getSimpleName()
+        );
+    }
+
+    public static String formatSortKey(
+            String id
+    ) {
+        return String.format(
+                "ENTITYID=%s,LISTTYPE=MUSICENTITIES",
+                id
+        );
+    }
 }
