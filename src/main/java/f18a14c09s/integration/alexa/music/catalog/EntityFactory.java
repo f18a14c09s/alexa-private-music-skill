@@ -79,6 +79,7 @@ public class EntityFactory {
                 art
         );
     }
+
     public Track newTrackEntity(TrackMetadata mp3, String url, Collection<ArtistReference> artists, AlbumReference album, Art art) {
         Track retval = new Track();
         retval.setLanguageOfContent(asArrayList(en));

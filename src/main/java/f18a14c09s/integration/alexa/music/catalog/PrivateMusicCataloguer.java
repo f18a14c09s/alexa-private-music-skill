@@ -29,7 +29,6 @@ import java.util.concurrent.*;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static f18a14c09s.util.CollectionUtil.asArrayList;
@@ -294,9 +293,15 @@ class PrivateMusicCataloguer {
             Mp3Folder folder = mp3Folders.remove(0);
             mp3Folders.addAll(folder.getChildren());
             for (TrackMetadata metadata : folder.getMp3s()) {
-                List<ArtistReference> trackArtists = metadata.getDistinctArtistNames().keySet().stream().map(artists::get).collect(Collectors.toList());
+                Set<String> trackArtistNames = Optional.of(metadata.getDistinctArtistNames())
+                        .map(Map::keySet)
+                        .filter(Predicate.not(Set::isEmpty))
+                        .orElse(Set.of("Unknown"));
+                List<ArtistReference> trackArtists = trackArtistNames.stream()
+                        .map(artists::get)
+                        .collect(Collectors.toList());
                 System.out.println(jsonAdapter.writeValueAsString(metadata));
-                AlbumReference trackAlbum = metadata.getDistinctArtistNames().keySet().stream().filter(Objects::nonNull).map(
+                AlbumReference trackAlbum = trackArtistNames.stream().filter(Objects::nonNull).map(
                         trackArtistName -> asArrayList(
                                 trackArtistName,
                                 metadata.getAlbum()
@@ -317,7 +322,7 @@ class PrivateMusicCataloguer {
                 } else {
                     tracks.add(trackEntity);
                     trackUrlsById.put(trackEntity.getId(), trackEntity.getUrl());
-                    for(ArtistReference artistReference : trackEntity.getArtists()) {
+                    for (ArtistReference artistReference : trackEntity.getArtists()) {
                         System.out.println(
                                 jsonAdapter.writeValueAsString(artistReference)
                         );
@@ -326,7 +331,7 @@ class PrivateMusicCataloguer {
                                 artistId -> new ArrayList<>()
                         ).add(trackEntity);
                     }
-                    for(AlbumReference albumReference : trackEntity.getAlbums()) {
+                    for (AlbumReference albumReference : trackEntity.getAlbums()) {
                         childTracksByAlbumId.computeIfAbsent(
                                 albumReference.getId(),
                                 artistId -> new ArrayList<>()
@@ -360,7 +365,7 @@ class PrivateMusicCataloguer {
             tasks.addAll(
                     threadPoolExecutor.invokeAll(
                             tracks.stream().<Callable<Track>>map(
-                                    track->() -> {
+                                    track -> () -> {
                                         try {
                                             catalogDAO.save(track);
                                         } catch (RuntimeException e) {
@@ -378,21 +383,32 @@ class PrivateMusicCataloguer {
             tasks.addAll(
                     threadPoolExecutor.invokeAll(
                             childTracksByArtistId.entrySet().stream().<Callable<Track>>map(
-                                    artistIdChildTracks->() -> {
+                                    artistIdChildTracks -> () -> {
 //                                        try {
-                                            catalogDAO.saveChildTrackAssociations(
-                                                    Artist.class,
-                                                    artistIdChildTracks.getKey(),
-                                                    artistIdChildTracks.getValue().stream().sorted(
-                                                            Comparator.<Track,Long>comparing(
-                                                                    track -> track.getAlbums().get(0).getNaturalOrder()
-                                                            ).thenComparing(
-                                                                    track -> track.getAlbums().get(0).getNames().get(0).getValue()
-                                                            ).thenComparing(
-                                                                    Track::getNaturalOrder
-                                                            )
-                                                    ).collect(Collectors.toList())
-                                                    );
+                                        catalogDAO.saveChildTrackAssociations(
+                                                Artist.class,
+                                                artistIdChildTracks.getKey(),
+                                                artistIdChildTracks.getValue().stream().sorted(
+                                                        Comparator.<Track, Long>comparing(
+                                                                track -> track.getAlbums()
+                                                                        .stream()
+                                                                        .map(
+                                                                                albumReference -> Optional.ofNullable(albumReference.getNaturalOrder())
+                                                                                        .orElse(0L)
+                                                                        )
+                                                                        .findAny()
+                                                                        .orElse(0L)
+                                                        ).thenComparing(
+                                                                track -> track.getAlbums().stream().flatMap(
+                                                                        albumReference -> albumReference.getNames()
+                                                                                .stream()
+                                                                ).map(EntityName::getValue).findAny().orElse("")
+                                                        ).thenComparing(
+                                                                track -> Optional.ofNullable(track.getNaturalOrder())
+                                                                        .orElse(0L)
+                                                        )
+                                                ).collect(Collectors.toList())
+                                        );
 //                                        } catch (RuntimeException e) {
 //                                            System.out.printf(
 //                                                    "Failure:%n\t%s%n",
@@ -408,7 +424,7 @@ class PrivateMusicCataloguer {
             tasks.addAll(
                     threadPoolExecutor.invokeAll(
                             childTracksByAlbumId.entrySet().stream().<Callable<Track>>map(
-                                    albumIdChildTracks->() -> {
+                                    albumIdChildTracks -> () -> {
                                         catalogDAO.saveChildTrackAssociations(
                                                 Album.class,
                                                 albumIdChildTracks.getKey(),
