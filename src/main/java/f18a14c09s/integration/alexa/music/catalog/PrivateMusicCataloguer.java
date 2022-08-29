@@ -430,7 +430,8 @@ class PrivateMusicCataloguer {
                                                 albumIdChildTracks.getKey(),
                                                 albumIdChildTracks.getValue().stream().sorted(
                                                         Comparator.comparing(
-                                                                Track::getNaturalOrder
+                                                                track -> Optional.ofNullable(track.getNaturalOrder())
+                                                                        .orElse(0L)
                                                         )
                                                 ).collect(Collectors.toList())
                                         );
