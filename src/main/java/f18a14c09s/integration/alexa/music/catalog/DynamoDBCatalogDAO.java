@@ -1,9 +1,10 @@
 package f18a14c09s.integration.alexa.music.catalog;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import f18a14c09s.integration.alexa.music.catalog.data.*;
-import f18a14c09s.integration.alexa.music.entities.*;
+import f18a14c09s.integration.alexa.music.entities.Album;
+import f18a14c09s.integration.alexa.music.entities.Artist;
+import f18a14c09s.integration.alexa.music.entities.BaseEntity;
+import f18a14c09s.integration.alexa.music.entities.Track;
 import f18a14c09s.integration.mp3.TrackMetadata;
 import software.amazon.awssdk.enhanced.dynamodb.DynamoDbEnhancedClient;
 import software.amazon.awssdk.enhanced.dynamodb.DynamoDbTable;
@@ -13,7 +14,9 @@ import software.amazon.awssdk.enhanced.dynamodb.model.Page;
 import software.amazon.awssdk.enhanced.dynamodb.model.PageIterable;
 import software.amazon.awssdk.enhanced.dynamodb.model.QueryConditional;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.stream.Collectors;
 
 
 public class DynamoDBCatalogDAO {
@@ -28,6 +31,13 @@ public class DynamoDBCatalogDAO {
         this.dynamodbClient = DynamoDbEnhancedClient.builder().build();
         this.stringPkStringSkTableName = stringPkStringSkTableName;
         this.stringPkNumericSkTableName = stringPkNumericSkTableName;
+    }
+
+    public DynamoDBCatalogDAO() {
+        this(
+                System.getenv("STR_PK_STR_SK_DYNAMODB_TABLE_NAME"),
+                System.getenv("STR_PK_NUM_SK_DYNAMODB_TABLE_NAME")
+        );
     }
 
     public void save(Track musicEntity) {
@@ -208,6 +218,21 @@ public class DynamoDBCatalogDAO {
         return findTrack(
                 nextChildItem.getTrackId()
         );
+    }
+
+    public List<Track> listChildTracks(
+            Class<? extends BaseEntity> parentEntityClass,
+            String parentEntityId
+    ) {
+        PageIterable<ChildTrackItem> childTracks = iterateChildTracks(
+                parentEntityClass, parentEntityId
+        );
+        return childTracks.stream()
+                .map(Page::items)
+                .flatMap(Collection::stream)
+                .map(ChildTrackItem::getTrackId)
+                .map(this::findTrack)
+                .collect(Collectors.toList());
     }
 
     private PageIterable<ChildTrackItem> iterateChildTracks(

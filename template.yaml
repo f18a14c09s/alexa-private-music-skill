@@ -3,7 +3,7 @@ Transform: 'AWS::Serverless-2016-10-31'
 
 Resources:
   PrivateMusicAlexaSkillLambda:
-    Type: 'AWS::Serverless::Function'
+    Type: AWS::Serverless::Function
     Properties:
       FunctionName: privateMusicAlexaSkill
       Runtime: java11
@@ -14,6 +14,10 @@ Resources:
       Events:
         AlexaSkillEvent:
           Type: AlexaSkill
+      Environment:
+        Variables:
+          STR_PK_STR_SK_DYNAMODB_TABLE_NAME: !Ref StringPartitionKeyStringSortKeyTable
+          STR_PK_NUM_SK_DYNAMODB_TABLE_NAME: !Ref StringPartitionKeyNumericSortKeyTable
 
   StringPartitionKeyStringSortKeyTable:
     Type: AWS::DynamoDB::Table

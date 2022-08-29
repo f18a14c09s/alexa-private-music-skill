@@ -71,6 +71,15 @@ public class EntityFactory {
     }
 
     public Track newTrackEntity(TrackMetadata mp3, String url, ArtistReference artist, AlbumReference album, Art art) {
+        return newTrackEntity(
+                mp3,
+                url,
+                List.of(artist),
+                album,
+                art
+        );
+    }
+    public Track newTrackEntity(TrackMetadata mp3, String url, Collection<ArtistReference> artists, AlbumReference album, Art art) {
         Track retval = new Track();
         retval.setLanguageOfContent(asArrayList(en));
         retval.setNames(asArrayList(new EntityName(en, mp3.getTitle())));
@@ -80,7 +89,7 @@ public class EntityFactory {
 //        retval.setReleaseType(StudioAlbum.getTitle());
 //        retval.setLastUpdatedTime(Calendar.getInstance());
         retval.setLastUpdatedTime(ZonedDateTime.now());
-        retval.setArtists(asArrayList(artist));
+        retval.setArtists(List.copyOf(artists));
         retval.setAlbums(asArrayList(album));
         retval.setLocales(asArrayList(defaultLocale));
         retval.setUrl(url);

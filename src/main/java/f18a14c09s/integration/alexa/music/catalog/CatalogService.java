@@ -7,7 +7,6 @@ import f18a14c09s.integration.alexa.music.data.ItemRules;
 import f18a14c09s.integration.alexa.music.data.Stream;
 import f18a14c09s.integration.alexa.music.entities.Album;
 import f18a14c09s.integration.alexa.music.entities.Artist;
-import f18a14c09s.integration.alexa.music.entities.BaseEntity;
 import f18a14c09s.integration.alexa.music.entities.Track;
 import f18a14c09s.integration.alexa.music.playback.data.PlaybackInfo;
 
@@ -15,86 +14,70 @@ import java.io.IOException;
 import java.util.*;
 
 public class CatalogService {
-    private CatalogDAO dao;
+    private DynamoDBCatalogDAO catalogDAO;
 
     public CatalogService() throws IOException {
-        this.dao = new CatalogDAO();
+        this.catalogDAO = new DynamoDBCatalogDAO();
     }
 
     public Item getFirstTrack(String contentId) {
-        BaseEntity entity = dao.findEntity(BaseEntity.class, contentId);
-        if (entity instanceof Artist) {
+        Track track;
+        if (isArtistEntity(contentId)) {
             return findArtistFirstTrack(contentId);
-        } else if (entity instanceof Album) {
+        } else if (isAlbumEntity(contentId)) {
             return findAlbumFirstTrack(contentId);
-        } else if (entity instanceof Track) {
-            return toItem(Collections.singletonList((Track) entity), 0);
+        } else if ((track = catalogDAO.findTrack(contentId)) != null) {
+            return toItem(Collections.singletonList(track), 0);
         } else {
             throw new UnsupportedOperationException(String.format(
-                    "Not sure how to get the first track for entity %s of type: %s.",
-                    contentId,
-                    Optional.ofNullable(entity)
-                            .map(Object::getClass)
-                            .map(Class::getName)
-                            .orElse("Unknown, as the object is null")));
+                    "Not sure how to get the first track for entity %s.",
+                    contentId
+            ));
         }
     }
 
     public Item getPreviousTrack(String contentId, String currentTrackId) {
-        BaseEntity entity = dao.findEntity(BaseEntity.class, contentId);
-        if (entity instanceof Artist) {
+        if (isArtistEntity(contentId)) {
             return findArtistPreviousTrack(contentId, currentTrackId);
-        } else if (entity instanceof Album) {
+        } else if (isAlbumEntity(contentId)) {
             return findAlbumPreviousTrack(contentId, currentTrackId);
         } else {
             throw new UnsupportedOperationException(String.format(
-                    "Not sure how to get the previous track for entity %s of type: %s.",
-                    contentId,
-                    Optional.ofNullable(entity)
-                            .map(Object::getClass)
-                            .map(Class::getName)
-                            .orElse("Unknown, as the object is null")));
+                    "Not sure how to get the previous track for entity %s.",
+                    contentId
+            ));
         }
     }
 
     public Item getNextTrack(String contentId, String currentTrackId) {
-        BaseEntity entity = dao.findEntity(BaseEntity.class, contentId);
-        if (entity instanceof Artist) {
+        if (isArtistEntity(contentId)) {
             return findArtistNextTrack(contentId, currentTrackId);
-        } else if (entity instanceof Album) {
+        } else if (isAlbumEntity(contentId)) {
             return findAlbumNextTrack(contentId, currentTrackId);
         } else {
             throw new UnsupportedOperationException(String.format(
-                    "Not sure how to get the next track for entity %s of type: %s.",
-                    contentId,
-                    Optional.ofNullable(entity)
-                            .map(Object::getClass)
-                            .map(Class::getName)
-                            .orElse("Unknown, as the object is null")));
+                    "Not sure how to get the next track for entity %s.",
+                    contentId
+            ));
         }
     }
 
-    private Item findArtistFirstTrack(String id) {
-        List<Track> tracks = dao.findArtistTracks(id);
-        return toItem(tracks, 0);
-    }
-
-    private Item toItem(List<Track> tracks, int j) {
-        Track firstTrack = tracks.get(j);
+    private Item toItem(List<Track> tracks, int trackIndex) {
+        Track track = tracks.get(trackIndex);
         Item item = new Item();
-        item.setControls(Arrays.asList(CommandItemControl.previous(j > 0),
-                CommandItemControl.next(j + 1 < tracks.size()),
+        item.setControls(Arrays.asList(CommandItemControl.previous(trackIndex > 0),
+                CommandItemControl.next(trackIndex + 1 < tracks.size()),
                 AdjustItemControl.seekPosition(false)));
-        item.setDurationInMilliseconds(Optional.ofNullable(firstTrack.getDurationSeconds())
+        item.setDurationInMilliseconds(Optional.ofNullable(track.getDurationSeconds())
                 .map(seconds -> seconds * 1000L)
                 .orElse(null));
-        item.setId(firstTrack.getId());
-        item.setMetadata(firstTrack.toMediaMetadata());
+        item.setId(track.getId());
+        item.setMetadata(track.toMediaMetadata());
         item.setPlaybackInfo(PlaybackInfo.defaultType());
         item.setRules(ItemRules.disallowFeedback());
         Calendar validUntil = Calendar.getInstance();
         validUntil.add(Calendar.YEAR, 1);
-        item.setStream(new Stream(firstTrack.getId(), firstTrack.getUrl(), 0L, validUntil));
+        item.setStream(new Stream(track.getId(), track.getUrl(), 0L, validUntil));
         return item;
     }
 
@@ -116,28 +99,59 @@ public class CatalogService {
         return null;
     }
 
-    private Item findArtistPreviousTrack(String artistId, String currentTrackId) {
-        List<Track> tracks = dao.findArtistTracks(artistId);
+    private Item findArtistFirstTrack(String id) {
+        List<Track> tracks = catalogDAO.listChildTracks(
+                Artist.class,
+                id
+        );
+        return toItem(tracks, 0);
+    }
+
+    private Item findArtistPreviousTrack(String id, String currentTrackId) {
+        List<Track> tracks = catalogDAO.listChildTracks(
+                Artist.class,
+                id
+        );
         return extractPreviousTrack(currentTrackId, tracks);
     }
 
-    private Item findArtistNextTrack(String artistId, String currentTrackId) {
-        List<Track> tracks = dao.findArtistTracks(artistId);
+    private Item findArtistNextTrack(String id, String currentTrackId) {
+        List<Track> tracks = catalogDAO.listChildTracks(
+                Artist.class,
+                id
+        );
         return extractNextTrack(currentTrackId, tracks);
     }
 
     private Item findAlbumFirstTrack(String id) {
-        List<Track> tracks = dao.findAlbumTracks(id);
+        List<Track> tracks = catalogDAO.listChildTracks(
+                Album.class,
+                id
+        );
         return toItem(tracks, 0);
     }
 
-    private Item findAlbumPreviousTrack(String albumId, String currentTrackId) {
-        List<Track> tracks = dao.findAlbumTracks(albumId);
+    private Item findAlbumPreviousTrack(String id, String currentTrackId) {
+        List<Track> tracks = catalogDAO.listChildTracks(
+                Album.class,
+                id
+        );
         return extractPreviousTrack(currentTrackId, tracks);
     }
 
-    private Item findAlbumNextTrack(String albumId, String currentTrackId) {
-        List<Track> tracks = dao.findAlbumTracks(albumId);
+    private Item findAlbumNextTrack(String id, String currentTrackId) {
+        List<Track> tracks = catalogDAO.listChildTracks(
+                Album.class,
+                id
+        );
         return extractNextTrack(currentTrackId, tracks);
+    }
+
+    private boolean isArtistEntity(String contentId) {
+        return catalogDAO.findArtist(contentId) != null;
+    }
+
+    private boolean isAlbumEntity(String contentId) {
+        return catalogDAO.findAlbum(contentId) != null;
     }
 }

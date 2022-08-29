@@ -3,13 +3,14 @@ package f18a14c09s.integration.json;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import f18a14c09s.util.StringObjectMap;
 
 import java.io.*;
-import java.util.*;
+import java.util.Map;
 
 public class JSONAdapter {
-    private ObjectMapper defaultJsonMapper = new ObjectMapper();
+    private ObjectMapper defaultJsonMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
     public JSONAdapter() {
         defaultJsonMapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);

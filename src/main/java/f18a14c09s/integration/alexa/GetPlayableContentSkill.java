@@ -1,33 +1,30 @@
 package f18a14c09s.integration.alexa;
 
 import f18a14c09s.integration.alexa.data.*;
-import f18a14c09s.integration.alexa.music.catalog.CatalogDAO;
+import f18a14c09s.integration.alexa.music.catalog.DynamoDBCatalogDAO;
 import f18a14c09s.integration.alexa.music.data.Content;
 import f18a14c09s.integration.alexa.music.data.ContentActions;
 import f18a14c09s.integration.alexa.music.data.RequestType;
 import f18a14c09s.integration.alexa.music.data.ResolvedSelectionCriteria;
-import f18a14c09s.integration.alexa.music.entities.*;
+import f18a14c09s.integration.alexa.music.entities.BaseEntity;
+import f18a14c09s.integration.alexa.music.entities.EntityType;
 import f18a14c09s.integration.alexa.music.messagetypes.AlexaMediaSearch;
 import f18a14c09s.integration.alexa.music.messagetypes.GetPlayableContentRequest;
 import f18a14c09s.integration.alexa.music.messagetypes.GetPlayableContentResponse;
 import f18a14c09s.integration.alexa.music.messagetypes.Response;
 
-import java.io.IOException;
-import java.util.*;
-import java.util.stream.*;
+import java.util.List;
+import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 public class GetPlayableContentSkill extends AbstractMusicSkill<GetPlayableContentRequest, Response<?>> {
-    private CatalogDAO dao;
+    private DynamoDBCatalogDAO catalogDAO;
 
     public GetPlayableContentSkill() {
         super(GetPlayableContentRequest.class,
                 new RequestType(AlexaMediaSearch.NAMESPACE_NAME, AlexaMediaSearch.GET_PLAYABLE_CONTENT.getMyName()));
-        try {
-            dao = new CatalogDAO();
-        } catch (IOException e) {
-            getLogger().error("Unable to setup catalog DAO.", e);
-            throw new RuntimeException(e);
-        }
+        catalogDAO = new DynamoDBCatalogDAO();
     }
 
     @Override
@@ -64,7 +61,7 @@ public class GetPlayableContentSkill extends AbstractMusicSkill<GetPlayableConte
                 }
                 return findEntity(request.getHeader().getMessageId(),
                         (ResolvedSelectionCriteria.BasicEntityAttribute) artistFilter.get(0),
-                        Artist.class);
+                        catalogDAO::findArtist);
             } else if (!albumFilter.isEmpty()) {
                 if (criteria.getAttributes().size() > albumFilter.size() + mediaType.size() + sortType.size()) {
                     return entityNotFound(request.getHeader().getMessageId(),
@@ -72,7 +69,7 @@ public class GetPlayableContentSkill extends AbstractMusicSkill<GetPlayableConte
                 }
                 return findEntity(request.getHeader().getMessageId(),
                         (ResolvedSelectionCriteria.BasicEntityAttribute) albumFilter.get(0),
-                        Album.class);
+                        catalogDAO::findAlbum);
             } else if (!songFilter.isEmpty()) {
                 if (criteria.getAttributes().size() > songFilter.size() + mediaType.size() + sortType.size()) {
                     return entityNotFound(request.getHeader().getMessageId(),
@@ -80,7 +77,7 @@ public class GetPlayableContentSkill extends AbstractMusicSkill<GetPlayableConte
                 }
                 return findEntity(request.getHeader().getMessageId(),
                         (ResolvedSelectionCriteria.BasicEntityAttribute) songFilter.get(0),
-                        Track.class);
+                        catalogDAO::findTrack);
             } else {
                 return entityNotFound(request.getHeader().getMessageId(),
                         "Not sure how to handle the search criteria.");
@@ -92,8 +89,8 @@ public class GetPlayableContentSkill extends AbstractMusicSkill<GetPlayableConte
 
     private <E extends BaseEntity> Response<?> findEntity(String requestId,
                                                           ResolvedSelectionCriteria.BasicEntityAttribute attr,
-                                                          Class<E> targetClass) {
-        E entity = dao.findEntity(targetClass, attr.getEntityId());
+                                                          Function<String, E> finder) {
+        E entity = finder.apply(attr.getEntityId());
         if (entity == null) {
             return entityNotFound(requestId, attr);
         } else {
