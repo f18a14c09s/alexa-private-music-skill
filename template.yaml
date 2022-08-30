@@ -18,6 +18,11 @@ Resources:
         Variables:
           STR_PK_STR_SK_DYNAMODB_TABLE_NAME: !Ref StringPartitionKeyStringSortKeyTable
           STR_PK_NUM_SK_DYNAMODB_TABLE_NAME: !Ref StringPartitionKeyNumericSortKeyTable
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref StringPartitionKeyStringSortKeyTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref StringPartitionKeyNumericSortKeyTable
 
   StringPartitionKeyStringSortKeyTable:
     Type: AWS::DynamoDB::Table
@@ -37,39 +42,6 @@ Resources:
           AttributeType: S
         - AttributeName: sk
           AttributeType: S
-#      ContributorInsightsSpecification:
-#        ContributorInsightsSpecification
-#      GlobalSecondaryIndexes:
-#        - ContributorInsightsSpecification:
-#            ContributorInsightsSpecification
-#          IndexName: String
-#          KeySchema:
-#            - KeySchema
-#          Projection:
-#            Projection
-#          ProvisionedThroughput:
-#            ProvisionedThroughput
-#      ImportSourceSpecification:
-#        ImportSourceSpecification
-#      KinesisStreamSpecification:
-#        KinesisStreamSpecification
-#      LocalSecondaryIndexes:
-#        - IndexName: String
-#          KeySchema:
-#            - KeySchema
-#          Projection:
-#            Projection
-#      ProvisionedThroughput:
-#        ReadCapacityUnits: 1
-#        WriteCapacityUnits: 1
-#      SSESpecification:
-#        SSESpecification
-#      StreamSpecification:
-#        StreamSpecification
-#      Tags:
-#        - Tag
-#      TimeToLiveSpecification:
-#        TimeToLiveSpecification
 
   StringPartitionKeyNumericSortKeyTable:
     Type: AWS::DynamoDB::Table
