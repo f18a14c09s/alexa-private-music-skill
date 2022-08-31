@@ -1,5 +1,6 @@
 package f18a14c09s.integration.alexa.smapi;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import f18a14c09s.integration.alexa.music.catalog.data.AbstractCatalog;
@@ -33,7 +34,8 @@ public class CatalogContentUploadClient {
     );
 
     private String accessToken;
-    private ObjectMapper jsonMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+    private ObjectMapper jsonMapper = new ObjectMapper().registerModule(new JavaTimeModule())
+            .setSerializationInclusion(JsonInclude.Include.NON_NULL);
 
     public CatalogContentUploadClient(
             String accessToken
@@ -313,7 +315,7 @@ public class CatalogContentUploadClient {
         );
     }
 
-    public void uploadCatalogContent(
+    public String uploadCatalogContent(
             String catalogId,
             AbstractCatalog... catalogContentList
     ) throws IOException {
@@ -370,5 +372,6 @@ public class CatalogContentUploadClient {
                         )
                 ).collect(Collectors.toList())
         );
+        return uploadCreationResponse.getId();
     }
 }
