@@ -6,6 +6,9 @@ import lombok.Setter;
 import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbPartitionKey;
 import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbSortKey;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Getter
 @Setter
 public abstract class AbstractDeletionItem<E extends BaseEntity> implements StringPkStringSkDynamoDbItem {
@@ -36,13 +39,33 @@ public abstract class AbstractDeletionItem<E extends BaseEntity> implements Stri
         return "LISTTYPE=MUSICCATALOGENTITYDELETION";
     }
 
+    private static String formatSortKey(
+            Class<? extends BaseEntity> musicEntityClass,
+            String entityId
+    ) {
+        List<String> sortKeyComponents = new ArrayList<>();
+        sortKeyComponents.add(String.format(
+                "MUSICENTITYTYPE=%s",
+                musicEntityClass.getSimpleName()
+        ));
+        if (entityId != null) {
+            sortKeyComponents.add(String.format(
+                    "ENTITYID=%s",
+                    entityId
+            ));
+        }
+        return String.join(",", sortKeyComponents);
+    }
+
+    public static String formatSortKey(
+            Class<? extends BaseEntity> musicEntityClass
+    ) {
+        return formatSortKey(musicEntityClass, null);
+    }
+
     public static String formatSortKey(
             BaseEntity entity
     ) {
-        return String.format(
-                "MUSICENTITYTYPE=%s,ENTITYID=%s",
-                entity.getClass().getSimpleName(),
-                entity.getId()
-        );
+        return formatSortKey(entity.getClass(), entity.getId());
     }
 }

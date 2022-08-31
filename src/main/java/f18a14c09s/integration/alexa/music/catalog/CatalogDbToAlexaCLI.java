@@ -25,6 +25,7 @@ import java.net.URLConnection;
 import java.util.*;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class CatalogDbToAlexaCLI {
     private static final Logger LOGGER = Logger.getLogger(MethodHandles.lookup().lookupClass().getName());
@@ -40,6 +41,16 @@ public class CatalogDbToAlexaCLI {
     private static String skillId = System.getenv("PRIVATE_MUSIC_ALEXA_SKILL_ID");
     private static boolean uploadLatestCatalogs = false;
 
+    private static <E> List<E> concat(
+            Collection<E> c1,
+            Collection<E> c2
+    ) {
+        return Stream.concat(
+                c1.stream(),
+                c2.stream()
+        ).collect(Collectors.toList());
+    }
+
     public static void main(String... args) throws IOException, InterruptedException {
         Map<String, Catalog> skillCatalogsByType = mapSkillCatalogsByType(skillId);
         LOGGER.info(String.format(
@@ -52,9 +63,13 @@ public class CatalogDbToAlexaCLI {
 
         if (uploadLatestCatalogs) {
             List<Track> tracks = catalogDAO.listTracks();
-            LOGGER.info(String.format("%s tracks found.", tracks.size()));
+            List<Track> trackDeletions = catalogDAO.listTrackDeletions();
+            LOGGER.info(String.format("%s tracks, %s track deletions found.", tracks.size(), trackDeletions.size()));
             MusicRecordingCatalog trackCatalog = new MusicRecordingCatalog();
-            trackCatalog.setEntities(tracks);
+            trackCatalog.setEntities(concat(
+                    tracks,
+                    trackDeletions
+            ));
             trackCatalog.setLocales(List.of(Locale.en_US()));
             //
             Set<String> uniqueAlbumIds = tracks.stream()
@@ -63,17 +78,22 @@ public class CatalogDbToAlexaCLI {
                     .map(BaseEntityReference::getId)
                     .collect(Collectors.toSet());
             List<Album> albums = catalogDAO.listAlbums();
+            List<Album> albumDeletions = catalogDAO.listAlbumDeletions();
             int totalAlbums = albums.size();
             albums = albums.stream().filter(
                     album -> uniqueAlbumIds.contains(album.getId())
             ).collect(Collectors.toList());
             LOGGER.info(String.format(
-                    "%s albums found--filtered down from %s.",
+                    "%s albums found--filtered down from %s; %s album deletions found.",
                     albums.size(),
-                    totalAlbums
+                    totalAlbums,
+                    albumDeletions.size()
             ));
             MusicAlbumCatalog albumCatalog = new MusicAlbumCatalog();
-            albumCatalog.setEntities(albums);
+            albumCatalog.setEntities(concat(
+                    albums,
+                    albumDeletions
+            ));
             albumCatalog.setLocales(List.of(Locale.en_US()));
             //
             Set<String> uniqueArtistIds = tracks.stream()
@@ -82,17 +102,22 @@ public class CatalogDbToAlexaCLI {
                     .map(BaseEntityReference::getId)
                     .collect(Collectors.toSet());
             List<Artist> artists = catalogDAO.listArtists();
+            List<Artist> artistDeletions = catalogDAO.listArtistDeletions();
             int totalArtists = artists.size();
             artists = artists.stream().filter(
                     artist -> uniqueArtistIds.contains(artist.getId())
             ).collect(Collectors.toList());
             LOGGER.info(String.format(
-                    "%s artists found--filtered down from %s.",
+                    "%s artists found--filtered down from %s; %s artist deletions found.",
                     artists.size(),
-                    totalArtists
+                    totalArtists,
+                    artistDeletions.size()
             ));
             MusicGroupCatalog artistCatalog = new MusicGroupCatalog();
-            artistCatalog.setEntities(artists);
+            artistCatalog.setEntities(concat(
+                    artists,
+                    artistDeletions
+            ));
             artistCatalog.setLocales(List.of(Locale.en_US()));
 
             for (AbstractCatalog catalog : List.of(

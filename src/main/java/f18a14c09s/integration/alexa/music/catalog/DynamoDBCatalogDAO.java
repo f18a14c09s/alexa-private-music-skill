@@ -216,6 +216,27 @@ public class DynamoDBCatalogDAO {
         );
     }
 
+    public List<Artist> listArtistDeletions() {
+        return listMusicEntityDeletions(
+                Artist.class,
+                ArtistDeletionItem.class
+        );
+    }
+
+    public List<Album> listAlbumDeletions() {
+        return listMusicEntityDeletions(
+                Album.class,
+                AlbumDeletionItem.class
+        );
+    }
+
+    public List<Track> listTrackDeletions() {
+        return listMusicEntityDeletions(
+                Track.class,
+                TrackDeletionItem.class
+        );
+    }
+
     private <E extends BaseEntity, DI extends AbstractMusicEntityItem<E>> List<E> listMusicEntities(
             Class<E> entityClass,
             Class<DI> dynamodbItemClass
@@ -237,6 +258,33 @@ public class DynamoDBCatalogDAO {
                 .map(Page::items)
                 .flatMap(Collection::stream)
                 .map(AbstractMusicEntityItem::getEntity)
+                .collect(Collectors.toList());
+    }
+
+    private <E extends BaseEntity, DI extends AbstractDeletionItem<E>> List<E> listMusicEntityDeletions(
+            Class<E> entityClass,
+            Class<DI> dynamodbItemClass
+    ) {
+        DynamoDbTable<DI> catalogTableWithEntitySpecificSchema = dynamodbClient.table(
+                stringPkStringSkTableName, TableSchema.fromBean(dynamodbItemClass)
+        );
+        String partitionKey = AbstractDeletionItem.formatPartitionKey();
+        String sortKeyPrefix = AbstractDeletionItem.formatSortKey(
+                entityClass
+        );
+        PageIterable<DI> itemPages = catalogTableWithEntitySpecificSchema.query(
+                QueryConditional.sortBeginsWith(
+                        Key.builder().partitionValue(
+                                partitionKey
+                        ).sortValue(
+                                sortKeyPrefix
+                        ).build()
+                )
+        );
+        return itemPages.stream()
+                .map(Page::items)
+                .flatMap(Collection::stream)
+                .map(AbstractDeletionItem::getEntity)
                 .collect(Collectors.toList());
     }
 
