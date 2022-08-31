@@ -23,19 +23,19 @@ import java.util.stream.Collectors;
  * GetPlayableContent:
  * Get music entity (e.g. artist, album, track) by type and ID.
  * Table with string partition key; String sort key:
- *     MUSICENTITYTYPE=...; ENTITYID=...,LISTTYPE=MUSICENTITIES
- *
+ * MUSICENTITYTYPE=...; ENTITYID=...,LISTTYPE=MUSICENTITIES
+ * <p>
  * Initiate:
  * Either list and sort all of the artist/album's tracks or find the artist/album's first track.
  * Table with string partition key; numeric sort key:
- *     MUSICENTITYTYPE=...,ENTITYID=...,LISTTYPE=CHILDTRACKS; 123
+ * MUSICENTITYTYPE=...,ENTITYID=...,LISTTYPE=CHILDTRACKS; 123
  * Return the first item.
- *
+ * <p>
  * GetPreviousItem:
  * Either list and sort all of the artist/album's tracks or find the artist/album's track immediately preceding current track.
  * Same DynamoDB query as Initiate.
  * Iterate the result list until the current track is found, then return the previous item if it exists.
- *
+ * <p>
  * GetNextItem:
  * Either list and sort all of the artist/album's tracks or find the artist/album's track immediately following current track.
  * Same DynamoDB query as Initiate.
@@ -106,6 +106,56 @@ public class DynamoDBCatalogDAO {
         }
     }
 
+    public void markForDeletion(
+            Track entity,
+            AbstractDeletionItem.DeletionSource source
+    ) {
+        TrackDeletionItem deletion = new TrackDeletionItem();
+        deletion.setPk(AbstractDeletionItem.formatPartitionKey());
+        deletion.setSk(AbstractDeletionItem.formatSortKey(
+                entity
+        ));
+        deletion.setEntity(entity);
+        saveEntityWithStringSortKey(
+                deletion,
+                TrackDeletionItem.class
+        );
+    }
+
+    public void markForDeletion(
+            Album entity,
+            AbstractDeletionItem.DeletionSource source
+    ) {
+        AlbumDeletionItem deletion = new AlbumDeletionItem();
+        deletion.setPk(AbstractDeletionItem.formatPartitionKey());
+        deletion.setSk(AbstractDeletionItem.formatSortKey(
+                entity
+        ));
+        deletion.setEntity(entity);
+        deletion.setDeletionSource(source);
+        saveEntityWithStringSortKey(
+                deletion,
+                AlbumDeletionItem.class
+        );
+    }
+
+    public void markForDeletion(
+            Artist entity,
+            AbstractDeletionItem.DeletionSource source
+    ) {
+        ArtistDeletionItem deletion = new ArtistDeletionItem();
+        deletion.setPk(AbstractDeletionItem.formatPartitionKey());
+        deletion.setSk(AbstractDeletionItem.formatSortKey(
+                entity
+        ));
+        deletion.setEntity(entity);
+        deletion.setDeletionSource(source);
+        saveEntityWithStringSortKey(
+                deletion,
+                ArtistDeletionItem.class
+        );
+    }
+
     private <E extends BaseEntity, DE extends AbstractMusicEntityItem<E>> void saveMusicEntity(E entity, DE dynamoDbItem, Class<DE> clazz) {
         dynamoDbItem.setEntity(entity);
         dynamoDbItem.setPk(AbstractMusicEntityItem.formatPartitionKey(entity.getClass()));
@@ -113,14 +163,14 @@ public class DynamoDBCatalogDAO {
         saveEntityWithStringSortKey(dynamoDbItem, clazz);
     }
 
-    private <E extends Object> void saveEntityWithStringSortKey(E entity, Class<E> clazz) {
+    private <E> void saveEntityWithStringSortKey(E entity, Class<E> clazz) {
         DynamoDbTable<E> catalogTableWithEntitySpecificSchema = dynamodbClient.table(
                 stringPkStringSkTableName, TableSchema.fromBean(clazz)
         );
         catalogTableWithEntitySpecificSchema.putItem(entity);
     }
 
-    private <E extends Object> void saveEntityWithNumericSortKey(E entity, Class<E> clazz) {
+    private <E> void saveEntityWithNumericSortKey(E entity, Class<E> clazz) {
         DynamoDbTable<E> catalogTableWithEntitySpecificSchema = dynamodbClient.table(
                 stringPkNumericSkTableName, TableSchema.fromBean(clazz)
         );
