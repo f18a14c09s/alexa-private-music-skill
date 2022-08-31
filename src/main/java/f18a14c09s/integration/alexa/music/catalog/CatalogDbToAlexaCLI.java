@@ -1,5 +1,6 @@
 package f18a14c09s.integration.alexa.music.catalog;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import f18a14c09s.integration.alexa.data.Locale;
@@ -7,13 +8,11 @@ import f18a14c09s.integration.alexa.music.catalog.data.AbstractCatalog;
 import f18a14c09s.integration.alexa.music.catalog.data.MusicAlbumCatalog;
 import f18a14c09s.integration.alexa.music.catalog.data.MusicGroupCatalog;
 import f18a14c09s.integration.alexa.music.catalog.data.MusicRecordingCatalog;
-import f18a14c09s.integration.alexa.music.entities.Album;
-import f18a14c09s.integration.alexa.music.entities.Artist;
-import f18a14c09s.integration.alexa.music.entities.BaseEntityReference;
-import f18a14c09s.integration.alexa.music.entities.Track;
+import f18a14c09s.integration.alexa.music.entities.*;
 import f18a14c09s.integration.alexa.smapi.CatalogContentUploadClient;
 import f18a14c09s.integration.alexa.smapi.data.Catalog;
 import f18a14c09s.integration.alexa.smapi.data.Upload;
+import f18a14c09s.util.StringObjectMap;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -51,6 +50,49 @@ public class CatalogDbToAlexaCLI {
         ).collect(Collectors.toList());
     }
 
+    private static <E extends BaseEntity> List<E> filterDeletedEntityAttributes(
+            Collection<E> entities,
+            Class<E> clazz
+    ) {
+        return entities.stream().map(
+                deletion -> filterDeletedEntityAttributes(
+                        deletion,
+                        clazz
+                )
+        ).collect(Collectors.toList());
+    }
+
+    private static <E extends BaseEntity> E filterDeletedEntityAttributes(
+            E entity,
+            Class<E> clazz
+    ) {
+        try {
+            entity = JSON_MAPPER.readValue(
+                    JSON_MAPPER.writeValueAsString(
+                            JSON_MAPPER.readValue(
+                                    JSON_MAPPER.writeValueAsString(
+                                            entity
+                                    ),
+                                    StringObjectMap.class
+                            ).entrySet().stream().filter(
+                                    mapEntry -> List.of(
+                                            "id",
+                                            "lastUpdatedTime"
+                                    ).contains(mapEntry.getKey())
+                            ).collect(Collectors.toMap(
+                                    Map.Entry::getKey,
+                                    Map.Entry::getValue
+                            ))
+                    ),
+                    clazz
+            );
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+        entity.setDeleted(true);
+        return entity;
+    }
+
     public static void main(String... args) throws IOException, InterruptedException {
         Map<String, Catalog> skillCatalogsByType = mapSkillCatalogsByType(skillId);
         LOGGER.info(String.format(
@@ -66,6 +108,10 @@ public class CatalogDbToAlexaCLI {
             List<Track> trackDeletions = catalogDAO.listTrackDeletions();
             LOGGER.info(String.format("%s tracks, %s track deletions found.", tracks.size(), trackDeletions.size()));
             MusicRecordingCatalog trackCatalog = new MusicRecordingCatalog();
+            trackDeletions = filterDeletedEntityAttributes(
+                    trackDeletions,
+                    Track.class
+            );
             trackCatalog.setEntities(concat(
                     tracks,
                     trackDeletions
@@ -90,6 +136,10 @@ public class CatalogDbToAlexaCLI {
                     albumDeletions.size()
             ));
             MusicAlbumCatalog albumCatalog = new MusicAlbumCatalog();
+            albumDeletions = filterDeletedEntityAttributes(
+                    albumDeletions,
+                    Album.class
+            );
             albumCatalog.setEntities(concat(
                     albums,
                     albumDeletions
@@ -114,6 +164,10 @@ public class CatalogDbToAlexaCLI {
                     artistDeletions.size()
             ));
             MusicGroupCatalog artistCatalog = new MusicGroupCatalog();
+            artistDeletions = filterDeletedEntityAttributes(
+                    artistDeletions,
+                    Artist.class
+            );
             artistCatalog.setEntities(concat(
                     artists,
                     artistDeletions
