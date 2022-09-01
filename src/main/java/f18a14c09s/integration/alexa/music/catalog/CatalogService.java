@@ -63,7 +63,7 @@ public class CatalogService {
     }
 
     private Item toItem(List<Track> tracks, int trackIndex) {
-        if (trackIndex < 0 || trackIndex > tracks.size()) {
+        if (trackIndex < 0 || trackIndex >= tracks.size()) {
             return null;
         }
         Track track = tracks.get(trackIndex);
