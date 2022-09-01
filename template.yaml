@@ -1,16 +1,63 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: 'AWS::Serverless-2016-10-31'
+
 Resources:
-  privateMusicAlexaSkill:
-    Type: 'AWS::Serverless::Function'
+  PrivateMusicAlexaSkillLambda:
+    Type: AWS::Serverless::Function
     Properties:
       FunctionName: privateMusicAlexaSkill
-      Runtime: java8
+      Runtime: java11
       Handler: f18a14c09s.integration.aws.PrivateMusicAlexaSkillRequestHandler::handleRequest
       CodeUri: ./target/lambda.jar
-      MemorySize: 512
-      Timeout: 15
-      Role: 'arn:aws:iam::734785652855:role/lambda_basic_execution'
+      MemorySize: 10240
+      Timeout: 60
       Events:
         AlexaSkillEvent:
           Type: AlexaSkill
+      Environment:
+        Variables:
+          STR_PK_STR_SK_DYNAMODB_TABLE_NAME: !Ref StringPartitionKeyStringSortKeyTable
+          STR_PK_NUM_SK_DYNAMODB_TABLE_NAME: !Ref StringPartitionKeyNumericSortKeyTable
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref StringPartitionKeyStringSortKeyTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref StringPartitionKeyNumericSortKeyTable
+
+  StringPartitionKeyStringSortKeyTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-StringPartitionKeyStringSortKeyTable"
+      BillingMode: PAY_PER_REQUEST
+      TableClass: STANDARD_INFREQUENT_ACCESS
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+
+  StringPartitionKeyNumericSortKeyTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-StringPartitionKeyNumericSortKeyTable"
+      BillingMode: PAY_PER_REQUEST
+      TableClass: STANDARD_INFREQUENT_ACCESS
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: N

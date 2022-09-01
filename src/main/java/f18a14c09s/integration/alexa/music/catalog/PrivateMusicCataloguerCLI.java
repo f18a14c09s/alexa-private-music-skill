@@ -1,94 +1,130 @@
 package f18a14c09s.integration.alexa.music.catalog;
 
-import java.io.File;
+import lombok.Getter;
+
 import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
-import java.util.function.*;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.function.UnaryOperator;
+import java.util.stream.Collectors;
 
 public class PrivateMusicCataloguerCLI {
+    @Getter
+    public enum CommandLineArgument {
+        SOURCE_S3_BUCKET_NAME(
+                "--src-s3-bucket",
+                List.of(UnaryOperator.identity())
+        ),
+        SOURCE_S3_PREFIX(
+                "--src-s3-prefix",
+                List.of(UnaryOperator.identity())
+        ),
+        DESTINATION_STR_STR_DYNAMODB_TABLE_NAME(
+                "--dest-str-str-dynamodb-table",
+                List.of(UnaryOperator.identity())
+        ),
+        DESTINATION_STR_NUM_DYNAMODB_TABLE_NAME(
+                "--dest-str-num-dynamodb-table",
+                List.of(UnaryOperator.identity())
+        ),
+        MUSIC_BASE_URL(
+                "--base-url",
+                List.of(UnaryOperator.identity())
+        ),
+        IMAGE_BASE_URL(
+                "--image-base-url",
+                List.of(UnaryOperator.identity())
+        );
+        public final String longArgumentName;
+        public final List<Function<String, ?>> argValueParsers;
 
-    public static final Map<String, List<Function<String, ?>>> VALID_COMMAND_LINE_ARGUMENTS =
-            getValidCommandLineArguments();
-
-    public static final String ARG_NAME_SRC_DIR = "--src-dir";
-    public static final String ARG_NAME_DEST_DIR = "--dest-dir";
-    public static final String ARG_NAME_BASE_URL = "--base-url";
-    public static final String ARG_NAME_IMAGE_BASE_URL = "--image-base-url";
-    public static final String ARG_NAME_RESET = "--reset";
-    public static final String ARG_NAME_WRITE_TO_DB = "--write-to-db";
+        CommandLineArgument(String longArgumentName, List<Function<String, ?>> argValueParsers) {
+            this.longArgumentName = longArgumentName;
+            this.argValueParsers = Collections.unmodifiableList(
+                    argValueParsers
+            );
+        }
+    }
 
     public static void main(String... args) throws IOException, NoSuchAlgorithmException {
         PrivateMusicCataloguer cli = newCataloguer(parseCommandLineArguments(args));
         cli.catalogMusic();
     }
 
-    private static PrivateMusicCataloguer newCataloguer(Map<String, List<Object>> args) throws
+    private static PrivateMusicCataloguer newCataloguer(Map<CommandLineArgument, List<Object>> args) throws
             IOException,
             NoSuchAlgorithmException {
+        args.entrySet().forEach(arg -> System.out.printf("%s: %s%n", arg.getKey().longArgumentName, arg.getValue()));
         List<String> validationErrors = new ArrayList<>();
-        File src = null, dest = null;
-        String baseUrl = null;
-        String imageBaseUrl = null;
-        boolean reset = args.containsKey(ARG_NAME_RESET);
-        boolean writeToDb = args.containsKey(ARG_NAME_WRITE_TO_DB);
-        if (args.containsKey(ARG_NAME_SRC_DIR)) {
-            src = new File((String) args.get(ARG_NAME_SRC_DIR).get(0));
-        } else {
-            validationErrors.add(String.format("Argument %s is required.", ARG_NAME_SRC_DIR));
+        for (CommandLineArgument requiredArg :
+                Set.of(
+                        CommandLineArgument.SOURCE_S3_BUCKET_NAME,
+                        CommandLineArgument.SOURCE_S3_PREFIX,
+                        CommandLineArgument.MUSIC_BASE_URL,
+                        CommandLineArgument.IMAGE_BASE_URL,
+                        CommandLineArgument.DESTINATION_STR_STR_DYNAMODB_TABLE_NAME,
+                        CommandLineArgument.DESTINATION_STR_NUM_DYNAMODB_TABLE_NAME
+                )) {
+            if (Optional.ofNullable(args.get(requiredArg)).filter(Predicate.not(List::isEmpty)).map(list -> list.get(0)).filter(value -> !(value instanceof String) || !String.class.cast(value).trim().isEmpty()).isEmpty()) {
+                validationErrors.add(String.format("Argument %s is required.", requiredArg.longArgumentName));
+            }
         }
-        if (args.containsKey(ARG_NAME_BASE_URL)) {
-            baseUrl = (String) args.get(ARG_NAME_BASE_URL).get(0);
-        } else {
-            validationErrors.add(String.format("Argument %s is required.", ARG_NAME_BASE_URL));
-        }
-        if (args.containsKey(ARG_NAME_IMAGE_BASE_URL)) {
-            imageBaseUrl = (String) args.get(ARG_NAME_IMAGE_BASE_URL).get(0);
-        } else {
-            validationErrors.add(String.format("Argument %s is required.", ARG_NAME_IMAGE_BASE_URL));
-        }
+        String sourceS3BucketName = Optional.ofNullable(
+                args.get(CommandLineArgument.SOURCE_S3_BUCKET_NAME)
+        ).map(argValues -> argValues.get(0)).map(String.class::cast).orElse(null);
+        String sourceS3Prefix = Optional.ofNullable(
+                args.get(CommandLineArgument.SOURCE_S3_PREFIX)
+        ).map(argValues -> argValues.get(0)).map(String.class::cast).orElse(null);
+        String baseUrl = Optional.ofNullable(
+                args.get(CommandLineArgument.MUSIC_BASE_URL)
+        ).map(argValues -> argValues.get(0)).map(String.class::cast).orElse(null);
+        String imageBaseUrl = Optional.ofNullable(
+                args.get(CommandLineArgument.IMAGE_BASE_URL)
+        ).map(argValues -> argValues.get(0)).map(String.class::cast).orElse(null);
+        String destStrStrDynamodbTableName = Optional.ofNullable(
+                args.get(CommandLineArgument.DESTINATION_STR_STR_DYNAMODB_TABLE_NAME)
+        ).map(argValues -> argValues.get(0)).map(String.class::cast).orElse(null);
+        String destStrNumDynamodbTableName = Optional.ofNullable(
+                args.get(CommandLineArgument.DESTINATION_STR_NUM_DYNAMODB_TABLE_NAME)
+        ).map(argValues -> argValues.get(0)).map(String.class::cast).orElse(null);
         if (!validationErrors.isEmpty()) {
             throw new IllegalArgumentException(validationErrors.toString());
         }
-        if (args.containsKey(ARG_NAME_DEST_DIR)) {
-            dest = new File((String) args.get(ARG_NAME_DEST_DIR).get(0));
-        }
-        return new PrivateMusicCataloguer(src, dest, baseUrl, reset, imageBaseUrl, writeToDb);
+        return new PrivateMusicCataloguer(
+                sourceS3BucketName,
+                sourceS3Prefix,
+                baseUrl,
+                imageBaseUrl,
+                destStrStrDynamodbTableName,
+                destStrNumDynamodbTableName
+        );
     }
 
-    private static Map<String, List<Object>> parseCommandLineArguments(String... args) {
-        Map<String, List<Object>> retval = new HashMap<>();
+    private static Map<CommandLineArgument, List<Object>> parseCommandLineArguments(String... args) {
+        Map<String, CommandLineArgument> validCommandLineArguments = Arrays.stream(CommandLineArgument.values()).collect(Collectors.toMap(CommandLineArgument::getLongArgumentName, Function.identity()));
+        Map<CommandLineArgument, List<Object>> retval = new HashMap<>();
         for (int i = 0; args != null && i < args.length; ) {
             String argName = args[i++];
-            if (!VALID_COMMAND_LINE_ARGUMENTS.containsKey(argName)) {
+            CommandLineArgument arg = validCommandLineArguments.get(argName);
+            if (arg == null) {
                 throw new IllegalArgumentException(String.format("Argument %s not recognized.", argName));
             }
-            List<Function<String, ?>> argValueParsers = VALID_COMMAND_LINE_ARGUMENTS.get(argName);
+            List<Function<String, ?>> argValueParsers = arg.argValueParsers;
             List<Object> argValues = new ArrayList<>();
             for (int j = 0; argValueParsers != null && j < argValueParsers.size(); j++, i++) {
                 if (i >= args.length) {
                     throw new IllegalArgumentException(String.format(
                             "Argument %s has too few values.  Required: %s.  Actual: %s.",
-                            argName,
+                            arg.longArgumentName,
                             j,
                             argValueParsers.size()));
                 }
                 argValues.add(argValueParsers.get(j).apply(args[i]));
             }
-            retval.put(argName, argValues);
+            retval.put(arg, argValues);
         }
         return retval;
     }
-
-    private static Map<String, List<Function<String, ?>>> getValidCommandLineArguments() {
-        Map<String, List<Function<String, ?>>> retval = new HashMap<>();
-        retval.put(ARG_NAME_SRC_DIR, Collections.unmodifiableList(Arrays.asList(UnaryOperator.identity())));
-        retval.put(ARG_NAME_DEST_DIR, Collections.unmodifiableList(Arrays.asList(UnaryOperator.identity())));
-        retval.put(ARG_NAME_BASE_URL, Collections.unmodifiableList(Arrays.asList(UnaryOperator.identity())));
-        retval.put(ARG_NAME_IMAGE_BASE_URL, Collections.unmodifiableList(Arrays.asList(UnaryOperator.identity())));
-        retval.put(ARG_NAME_RESET, null);
-        retval.put(ARG_NAME_WRITE_TO_DB, null);
-        return Collections.unmodifiableMap(retval);
-    }
-
 }

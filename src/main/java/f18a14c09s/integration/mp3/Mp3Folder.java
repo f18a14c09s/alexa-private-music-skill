@@ -7,7 +7,9 @@ import lombok.AccessLevel;
 import lombok.Getter;
 
 import java.util.*;
-import java.util.stream.*;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static f18a14c09s.integration.mp3.ImageMetadata.getExactlyOnePerSize;
 
@@ -62,21 +64,35 @@ public class Mp3Folder {
 
     public Set<AlbumKey> getUniqueAlbumNames() {
         Set<AlbumKey> retval = new HashSet<>();
-        Optional.ofNullable(getMp3s())
-                .map(Collection::stream)
-                .orElse(Stream.empty())
-                .map(track -> new AlbumKey(track.getAuthor(), track.getAlbum()))
+        Optional.ofNullable(getMp3s()).stream().flatMap(Collection::stream)
+                .flatMap(trackMetadata -> Optional.of(trackMetadata.getDistinctArtistNames())
+                        .map(Map::keySet)
+                        .filter(Predicate.not(Set::isEmpty))
+                        .orElse(Set.of("Unknown"))
+                        .stream()
+                        .map(
+                                artistName -> new AlbumKey(artistName, Optional.ofNullable(trackMetadata.getAlbum())
+                                        .orElse("Unknown"))
+                        ))
                 .forEach(retval::add);
         return retval;
     }
 
     public Set<String> getUniqueArtistNames() {
         Set<String> retval = new HashSet<>();
-        Optional.ofNullable(getMp3s())
-                .map(Collection::stream)
-                .orElse(Stream.empty())
-                .map(TrackMetadata::getAuthor)
+        Optional.ofNullable(getMp3s()).stream().flatMap(Collection::stream)
+                .flatMap(trackMetadata -> Optional.of(trackMetadata.getDistinctArtistNames())
+                        .map(Map::keySet)
+                        .filter(Predicate.not(Set::isEmpty))
+                        .orElse(Set.of("Unknown")).stream())
                 .forEach(retval::add);
         return retval;
+    }
+
+    public Stream<TrackMetadata> recurseMp3s() {
+        return Stream.concat(
+                getMp3s().stream(),
+                getChildren().stream().flatMap(Mp3Folder::recurseMp3s)
+        );
     }
 }
