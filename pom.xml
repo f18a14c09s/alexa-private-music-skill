@@ -5,14 +5,14 @@
 
     <groupId>f18a14c09s</groupId>
     <artifactId>alexa-private-music-skill</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.2-SNAPSHOT</version>
 
     <properties>
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <stackName>private-music-alexa-skill</stackName>
-        <s3Prefix>aws-serverless-java/${project.groupId}:${project.artifactId}:${project.version}</s3Prefix>
+<!--        <s3Prefix>aws-serverless-java/${project.groupId}:${project.artifactId}:${project.version}</s3Prefix>-->
         <skipLocalInvoke>true</skipLocalInvoke>
     </properties>
 
@@ -104,7 +104,7 @@
                             <arguments>
                                 <argument>package</argument>
                                 <argument>--template-file=template.yaml</argument>
-                                <argument>--output-template-file=target/sam.yaml</argument>
+<!--                                <argument>&#45;&#45;output-template-file=target/sam.yaml</argument>-->
                                 <argument>--resolve-s3</argument>
                             </arguments>
                         </configuration>
@@ -116,11 +116,11 @@
                             <goal>exec</goal>
                         </goals>
                         <configuration>
-                            <executable>aws</executable>
+                            <executable>sam</executable>
                             <arguments>
-                                <argument>cloudformation</argument>
+<!--                                <argument>cloudformation</argument>-->
                                 <argument>deploy</argument>
-                                <argument>--template-file=target/sam.yaml</argument>
+<!--                                <argument>&#45;&#45;template-file=target/sam.yaml</argument>-->
                                 <argument>--stack-name=${stackName}</argument>
                                 <argument>--capabilities=CAPABILITY_IAM</argument>
                             </arguments>
@@ -164,20 +164,20 @@
 
     <dependencies>
         <dependency>
-            <groupId>com.amazonaws</groupId>
-            <artifactId>aws-lambda-java-core</artifactId>
-            <version>1.2.1</version>
+            <groupId>f18a14c09s</groupId>
+            <artifactId>alexa-music-skill-model-4j</artifactId>
+            <version>1.2-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>com.amazon.alexa</groupId>
             <artifactId>ask-sdk</artifactId>
             <version>2.43.7</version>
         </dependency>
-        <dependency>
-            <groupId>com.amazonaws</groupId>
-            <artifactId>aws-lambda-java-log4j2</artifactId>
-            <version>1.5.1</version>
-        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>com.amazonaws</groupId>-->
+<!--            <artifactId>aws-lambda-java-log4j2</artifactId>-->
+<!--            <version>1.5.1</version>-->
+<!--        </dependency>-->
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>s3</artifactId>
@@ -186,10 +186,10 @@
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>dynamodb-enhanced</artifactId>
         </dependency>
-        <dependency>
-            <groupId>software.amazon.awssdk</groupId>
-            <artifactId>secretsmanager</artifactId>
-        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>software.amazon.awssdk</groupId>-->
+<!--            <artifactId>secretsmanager</artifactId>-->
+<!--        </dependency>-->
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-core</artifactId>
@@ -212,11 +212,6 @@
             <version>1.18.24</version>
             <scope>provided</scope>
         </dependency>
-        <dependency>
-            <groupId>f18a14c09s</groupId>
-            <artifactId>alexa-music-skill-model-4j</artifactId>
-            <version>1.1-SNAPSHOT</version>
-        </dependency>
         <!-- https://mvnrepository.com/artifact/com.fasterxml.jackson.datatype/jackson-datatype-jsr310 -->
         <dependency>
             <groupId>com.fasterxml.jackson.datatype</groupId>
@@ -228,35 +223,6 @@
             <groupId>com.googlecode.soundlibs</groupId>
             <artifactId>mp3spi</artifactId>
             <version>1.9.5.4</version>
-        </dependency>
-        <!-- https://mvnrepository.com/artifact/org.hibernate/hibernate-core -->
-        <dependency>
-            <groupId>org.hibernate</groupId>
-            <artifactId>hibernate-core</artifactId>
-            <version>6.1.2.Final</version>
-        </dependency>
-        <!-- https://mvnrepository.com/artifact/mysql/mysql-connector-java -->
-        <dependency>
-            <groupId>mysql</groupId>
-            <artifactId>mysql-connector-java</artifactId>
-            <version>8.0.30</version>
-        </dependency>
-        <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk -->
-        <!--<dependency>-->
-        <!--<groupId>com.amazonaws</groupId>-->
-        <!--<artifactId>aws-java-sdk</artifactId>-->
-        <!--<version>1.11.470</version>-->
-        <!--</dependency>-->
-        <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-secretsmanager -->
-        <dependency>
-            <groupId>com.amazonaws</groupId>
-            <artifactId>aws-java-sdk-secretsmanager</artifactId>
-<!--            <version>1.12.272</version>-->
-        </dependency>
-        <dependency>
-            <groupId>org.springframework</groupId>
-            <artifactId>spring-web</artifactId>
-            <version>5.3.22</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/org/jaudiotagger -->
         <dependency>
@@ -276,19 +242,6 @@
             <artifactId>junit-jupiter-engine</artifactId>
             <version>5.9.0</version>
             <scope>test</scope>
-        </dependency>
-        <!-- https://mvnrepository.com/artifact/com.h2database/h2 -->
-        <dependency>
-            <groupId>com.h2database</groupId>
-            <artifactId>h2</artifactId>
-            <version>2.1.214</version>
-            <!--<scope>test</scope>-->
-        </dependency>
-        <!-- https://mvnrepository.com/artifact/jakarta.persistence/jakarta.persistence-api -->
-        <dependency>
-            <groupId>jakarta.persistence</groupId>
-            <artifactId>jakarta.persistence-api</artifactId>
-            <version>3.1.0</version>
         </dependency>
     </dependencies>
 
