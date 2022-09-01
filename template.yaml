@@ -9,7 +9,7 @@ Resources:
       Runtime: java11
       Handler: f18a14c09s.integration.aws.PrivateMusicAlexaSkillRequestHandler::handleRequest
       CodeUri: ./target/lambda.jar
-      MemorySize: 10240
+      MemorySize: 2048
       Timeout: 60
       Events:
         AlexaSkillEvent:
