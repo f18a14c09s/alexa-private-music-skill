@@ -27,5 +27,6 @@
         <Root level="info">
             <AppenderRef ref="JsonAppender"/>
         </Root>
+        <Logger name="f18a14c09s" level="debug"/>
     </Loggers>
 </Configuration>
