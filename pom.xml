@@ -103,7 +103,6 @@
                             <arguments>
                                 <argument>package</argument>
                                 <argument>--template-file=template.yaml</argument>
-<!--                                <argument>&#45;&#45;output-template-file=target/sam.yaml</argument>-->
                                 <argument>--resolve-s3</argument>
                             </arguments>
                         </configuration>
@@ -171,6 +170,11 @@
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>dynamodb-enhanced</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-lambda-java-log4j2</artifactId>
+            <version>1.5.1</version>
         </dependency>
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
