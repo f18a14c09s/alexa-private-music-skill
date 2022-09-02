@@ -1,0 +1,30 @@
+{
+  "header": {
+    "payloadVersion": "1.0",
+    "namespace": "Alexa.Media.Search",
+    "name": "GetPlayableContent",
+    "messageId": "4LMp0Nenqmwmx2Ng7YQNvZ1IK"
+  },
+  "payload": {
+    "requestContext": {
+      "user": {
+        "id": "amzn1.ask.account.AFUVGW2NSFUNP3NYWXG57KAURGKNZKJXATZN76FDTLT756J63EIMXHSQXCLS2YKUXZRJC52XD6MOKLNZAVMZCQ3UN44H6IRDMQ3CNHQAITICITD22NYOIB3F3GQDC26H3LZU6MCZ3DC3F7JNX4HLHH4T7L3PNVGWVDEQ6DNC33YLZS54MHSN437Z4LZYCYWEQ5DFD5SMSDXLADA"
+      },
+      "location": {
+        "originatingLocale": "en-US",
+        "countryCode": "US"
+      }
+    },
+    "filters": {
+      "explicitLanguageAllowed": true
+    },
+    "selectionCriteria": {
+      "attributes": [
+        {
+          "type": "ALBUM",
+          "entityId": "000f983c-abe9-4b11-8646-458e1317f0b1"
+        }
+      ]
+    }
+  }
+}
