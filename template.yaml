@@ -18,7 +18,6 @@ Resources:
         Variables:
           STR_PK_STR_SK_DYNAMODB_TABLE_NAME: !Ref StringPartitionKeyStringSortKeyTable
           STR_PK_NUM_SK_DYNAMODB_TABLE_NAME: !Ref StringPartitionKeyNumericSortKeyTable
-          POWERTOOLS_LOG_LEVEL: DEBUG
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref StringPartitionKeyStringSortKeyTable
