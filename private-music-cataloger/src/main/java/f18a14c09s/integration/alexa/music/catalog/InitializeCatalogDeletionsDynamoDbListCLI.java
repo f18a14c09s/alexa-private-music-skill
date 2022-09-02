@@ -4,17 +4,14 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import f18a14c09s.integration.alexa.music.catalog.data.*;
-import f18a14c09s.integration.alexa.music.entities.Album;
-import f18a14c09s.integration.alexa.music.entities.Artist;
-import f18a14c09s.integration.alexa.music.entities.BaseEntity;
-import f18a14c09s.integration.alexa.music.entities.Track;
+import f18a14c09s.integration.alexa.music.entities.*;
 import f18a14c09s.util.StringObjectMap;
 
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
+import java.util.function.Function;
 
 public class InitializeCatalogDeletionsDynamoDbListCLI {
     private static final Map<String, Class<? extends AbstractCatalog>> CATALOG_TYPE_MAP = Map.of(
@@ -30,6 +27,30 @@ public class InitializeCatalogDeletionsDynamoDbListCLI {
     private static final DynamoDBCatalogDAO CATALOG_DAO = new DynamoDBCatalogDAO(
             "private-music-alexa-skill-StringPartitionKeyStringSortKeyTable",
             "private-music-alexa-skill-StringPartitionKeyNumericSortKeyTable"
+    );
+
+    private static final class MusicEntityKeyExtractors extends HashMap<Class<? extends BaseEntity>, Function<? extends BaseEntity, Object>> {
+        public <E extends BaseEntity> MusicEntityKeyExtractors withExtractor(
+                Class<E> entityClass,
+                Function<E, Object> extractor
+        ) {
+            this.put(entityClass, extractor);
+            return this;
+        }
+    }
+
+    private static final MusicEntityKeyExtractors MUSIC_ENTITY_KEY_EXTRACTORS = new MusicEntityKeyExtractors().withExtractor(
+            Track.class,
+            Track::getUrl
+    ).withExtractor(
+            Album.class,
+            album -> List.of(
+                    Optional.ofNullable(album.getArtists()).map(List::iterator).filter(Iterator::hasNext).map(Iterator::next).map(BaseEntityReference::getNames).map(List::iterator).filter(Iterator::hasNext).map(Iterator::next).map(EntityName::getValue).orElse("Unknown"),
+                    Optional.ofNullable(album.getNames()).map(List::iterator).filter(Iterator::hasNext).map(Iterator::next).map(EntityName::getValue).orElse("Unknown")
+            )
+    ).withExtractor(
+            Artist.class,
+            artist -> Optional.of(artist).map(Artist::getNames).map(List::iterator).filter(Iterator::hasNext).map(Iterator::next).map(EntityName::getValue).orElse("Unknown")
     );
 
     private static void markForDeletion(BaseEntity entity) {
