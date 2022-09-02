@@ -13,3 +13,7 @@ buildNumber.properties
 
 
 alexa-private-music-skill.iml
+aws-sam-stack/aws-sam-stack.iml
+private-music-cataloger/private-music-cataloger.iml
+integration-tests/integration-tests.iml
+integration-tests/alexa-private-music-skill-int-tests.iml

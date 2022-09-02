@@ -3,8 +3,8 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>f18a14c09s</groupId>
-    <artifactId>alexa-private-music-skill-int-tests</artifactId>
+    <groupId>f18a14c09s.integration.alexa.music</groupId>
+    <artifactId>integration-tests</artifactId>
     <version>1.2-SNAPSHOT</version>
 
     <properties>
