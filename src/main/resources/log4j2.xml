@@ -1,19 +1,4 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!--<Configuration packages="com.amazonaws.services.lambda.runtime.log4j2.LambdaAppender">-->
-<!--    <Appenders>-->
-<!--        <Lambda name="Lambda">-->
-<!--            <PatternLayout>-->
-<!--                <pattern>%d{yyyy-MM-dd HH:mm:ss} %X{AWSRequestId} %-5p %c{1}:%L - %m%n</pattern>-->
-<!--            </PatternLayout>-->
-<!--        </Lambda>-->
-<!--    </Appenders>-->
-<!--    <Loggers>-->
-<!--        <Logger name="f18a14c09s" level="debug"/>-->
-<!--        <Root level="warning">-->
-<!--            <AppenderRef ref="Lambda"/>-->
-<!--        </Root>-->
-<!--    </Loggers>-->
-<!--</Configuration>-->
 <Configuration>
     <Appenders>
         <Console name="JsonAppender" target="SYSTEM_OUT">
