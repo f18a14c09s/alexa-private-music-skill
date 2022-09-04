@@ -1,0 +1,73 @@
+{
+  "header": {
+    "payloadVersion": "1.0",
+    "namespace": "Alexa.Media.Search",
+    "name": "GetPlayableContent.Response",
+    "messageId": "4LMp0Nenqmwmx2Ng7YQNvZ1IK"
+  },
+  "payload": {
+    "content": {
+      "id": "000f983c-abe9-4b11-8646-458e1317f0b1",
+      "actions": {
+        "playable": true,
+        "browsable": true
+      },
+      "metadata": {
+        "type": "ALBUM",
+        "name": {
+          "speech": {
+            "type": "PLAIN_TEXT",
+            "text": "The Dutchess"
+          },
+          "display": "The Dutchess"
+        },
+        "art": {
+          "contentDescription": "Music icon (A. Minduka, https://openclipart.org/detail/27648/music-icon).",
+          "sources": [
+            {
+              "url": "https://images.music.francisjohnson.org/minduka/music-icon/small.png",
+              "size": "SMALL",
+              "widthPixels": 300,
+              "heightPixels": 306
+            },
+            {
+              "url": "https://images.music.francisjohnson.org/minduka/music-icon/large.png",
+              "size": "LARGE",
+              "widthPixels": 2400,
+              "heightPixels": 2452
+            },
+            {
+              "url": "https://images.music.francisjohnson.org/minduka/music-icon/medium.png",
+              "size": "MEDIUM",
+              "widthPixels": 800,
+              "heightPixels": 817
+            },
+            {
+              "url": "https://images.music.francisjohnson.org/minduka/music-icon/large.png",
+              "size": "X_LARGE",
+              "widthPixels": 2400,
+              "heightPixels": 2452
+            },
+            {
+              "url": "https://images.music.francisjohnson.org/minduka/music-icon/small.png",
+              "size": "X_SMALL",
+              "widthPixels": 300,
+              "heightPixels": 306
+            }
+          ]
+        },
+        "authors": [
+          {
+            "name": {
+              "speech": {
+                "type": "PLAIN_TEXT",
+                "text": "Fergie"
+              },
+              "display": "Fergie"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

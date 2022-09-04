@@ -11,5 +11,6 @@
     <modules>
         <module>aws-sam-stack</module>
         <module>private-music-cataloger</module>
+        <module>integration-tests</module>
     </modules>
 </project>

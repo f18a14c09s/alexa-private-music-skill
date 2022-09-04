@@ -1,0 +1,82 @@
+{
+  "header": {
+    "payloadVersion": "1.0",
+    "namespace": "Alexa.Media.Search",
+    "name": "GetPlayableContent.Response",
+    "messageId": "4LMp0Nenqmwmx2Ng7YQNvZ1IK"
+  },
+  "payload": {
+    "content": {
+      "id": "001bfd66-1e96-3d01-b1f4-dcadf5f9d877",
+      "actions": {
+        "playable": true,
+        "browsable": true
+      },
+      "metadata": {
+        "type": "TRACK",
+        "name": {
+          "speech": {
+            "type": "PLAIN_TEXT",
+            "text": "Blind Following"
+          },
+          "display": "Blind Following"
+        },
+        "art": {
+          "contentDescription": "Music icon (A. Minduka, https://openclipart.org/detail/27648/music-icon).",
+          "sources": [
+            {
+              "url": "https://images.music.francisjohnson.org/minduka/music-icon/small.png",
+              "size": "SMALL",
+              "widthPixels": 300,
+              "heightPixels": 306
+            },
+            {
+              "url": "https://images.music.francisjohnson.org/minduka/music-icon/small.png",
+              "size": "X_SMALL",
+              "widthPixels": 300,
+              "heightPixels": 306
+            },
+            {
+              "url": "https://images.music.francisjohnson.org/minduka/music-icon/medium.png",
+              "size": "MEDIUM",
+              "widthPixels": 800,
+              "heightPixels": 817
+            },
+            {
+              "url": "https://images.music.francisjohnson.org/minduka/music-icon/large.png",
+              "size": "X_LARGE",
+              "widthPixels": 2400,
+              "heightPixels": 2452
+            },
+            {
+              "url": "https://images.music.francisjohnson.org/minduka/music-icon/large.png",
+              "size": "LARGE",
+              "widthPixels": 2400,
+              "heightPixels": 2452
+            }
+          ]
+        },
+        "authors": [
+          {
+            "name": {
+              "speech": {
+                "type": "PLAIN_TEXT",
+                "text": "Benefit"
+              },
+              "display": "Benefit"
+            }
+          }
+        ],
+        "album": {
+          "name": {
+            "speech": {
+              "type": "PLAIN_TEXT",
+              "text": "B.E.N.E.F.I.T."
+            },
+            "display": "B.E.N.E.F.I.T."
+          }
+        }
+      }
+    }
+  }
+}
