@@ -29,30 +29,6 @@ public class InitializeCatalogDeletionsDynamoDbListCLI {
             "private-music-alexa-skill-StringPartitionKeyNumericSortKeyTable"
     );
 
-    private static final class MusicEntityKeyExtractors extends HashMap<Class<? extends BaseEntity>, Function<? extends BaseEntity, Object>> {
-        public <E extends BaseEntity> MusicEntityKeyExtractors withExtractor(
-                Class<E> entityClass,
-                Function<E, Object> extractor
-        ) {
-            this.put(entityClass, extractor);
-            return this;
-        }
-    }
-
-    private static final MusicEntityKeyExtractors MUSIC_ENTITY_KEY_EXTRACTORS = new MusicEntityKeyExtractors().withExtractor(
-            Track.class,
-            Track::getUrl
-    ).withExtractor(
-            Album.class,
-            album -> List.of(
-                    Optional.ofNullable(album.getArtists()).map(List::iterator).filter(Iterator::hasNext).map(Iterator::next).map(BaseEntityReference::getNames).map(List::iterator).filter(Iterator::hasNext).map(Iterator::next).map(EntityName::getValue).orElse("Unknown"),
-                    Optional.ofNullable(album.getNames()).map(List::iterator).filter(Iterator::hasNext).map(Iterator::next).map(EntityName::getValue).orElse("Unknown")
-            )
-    ).withExtractor(
-            Artist.class,
-            artist -> Optional.of(artist).map(Artist::getNames).map(List::iterator).filter(Iterator::hasNext).map(Iterator::next).map(EntityName::getValue).orElse("Unknown")
-    );
-
     private static void markForDeletion(BaseEntity entity) {
         if (entity instanceof Track) {
             CATALOG_DAO.markForDeletion(
