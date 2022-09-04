@@ -60,7 +60,7 @@ class MainFlowIntTest {
     )
     void testByEntityType(
             String testCaseFilenamePrefix
-    ) throws IOException {
+    ) {
         InvokeResponse actualResponse = lambdaClient.invoke(InvokeRequest.builder().functionName(
                 "privateMusicAlexaSkill"
         ).payload(
@@ -70,8 +70,11 @@ class MainFlowIntTest {
         assertNotNull(actualResponse);
         String actualPayloadJson = actualResponse.payload().asUtf8String();
         assertNotNull(actualPayloadJson);
+        Map<?,?> actualResponsePayload = assertDoesNotThrow(
+                () ->jsonMapper.readValue(actualResponse.payload().asUtf8String(), Map.class)
+        );
         assertEquals(
-                jsonMapper.readValue(actualResponse.payload().asUtf8String(), Map.class),
+                actualResponsePayload,
                 expectedDecodedPayload(testCaseFilenamePrefix),
                 actualResponse.payload().asUtf8String()
         );
