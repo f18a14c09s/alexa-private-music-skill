@@ -70,12 +70,17 @@ public class CrossReferenceOldEntityIdsCLI {
                     );
                     continue;
                 }
-                String newUrl = matchingNewTracks.get(0).getUrl();
-                oldTrack.setUrl(newUrl);
-                oldTrack.setDeleted(true);
-                CATALOG_DAO.save(
-                        oldTrack
-                );
+                Track newTrack = matchingNewTracks.get(0);
+//                String newUrl = newTrack.getUrl();
+//                oldTrack.setUrl(newUrl);
+//                oldTrack.setDeleted(true);
+//                CATALOG_DAO.save(
+//                        oldTrack
+//                );
+                // Save the new track as-is except as a copy with the old ID:
+                newTrack.setDeleted(true);
+                newTrack.setId(oldTrack.getId());
+                CATALOG_DAO.save(newTrack);
             }
             Map<String, List<Track>> oldTracksByOldArtistId = oldTracks.stream().collect(
                     Collectors.groupingBy(
@@ -200,10 +205,15 @@ public class CrossReferenceOldEntityIdsCLI {
                     );
                     continue;
                 }
-                oldAlbum.setDeleted(true);
-                CATALOG_DAO.save(
-                        oldAlbum
-                );
+                Album newAlbum = matchingNewAlbums.get(0);
+//                oldAlbum.setDeleted(true);
+//                CATALOG_DAO.save(
+//                        oldAlbum
+//                );
+                // Save the new album as-is except as a copy with the old ID:
+                newAlbum.setDeleted(true);
+                newAlbum.setId(oldAlbum.getId());
+                CATALOG_DAO.save(newAlbum);
             }
         }
     }
@@ -242,10 +252,15 @@ public class CrossReferenceOldEntityIdsCLI {
                     );
                     continue;
                 }
-                oldArtist.setDeleted(true);
-                CATALOG_DAO.save(
-                        oldArtist
-                );
+                Artist newArtist = matchingNewArtists.get(0);
+//                oldArtist.setDeleted(true);
+//                CATALOG_DAO.save(
+//                        oldArtist
+//                );
+                // Save the new artist as-is except as a copy with the old ID:
+                newArtist.setDeleted(true);
+                newArtist.setId(oldArtist.getId());
+                CATALOG_DAO.save(newArtist);
             }
         }
     }
