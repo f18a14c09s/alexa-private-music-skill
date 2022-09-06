@@ -26,9 +26,9 @@ import java.util.Optional;
 
 public class PrivateMusicSkill implements AlexaSkill<Request<?>, Response<?>> {
     private static final Logger LOGGER = LogManager.getLogger(MethodHandles.lookup().lookupClass());
-    private JSONAdapter jsonAdapter = new JSONAdapter();
     private static final Map<RequestType, AbstractMusicSkill<? extends Request<?>, ? extends Response<?>>>
             skillsByRequestType;
+    private JSONAdapter jsonAdapter = new JSONAdapter();
 
     static {
         Map<RequestType, AbstractMusicSkill<? extends Request<?>, ? extends Response<?>>> tempMap = new HashMap<>();

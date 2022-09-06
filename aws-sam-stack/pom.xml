@@ -163,10 +163,6 @@
             <artifactId>ask-sdk</artifactId>
             <version>2.43.7</version>
         </dependency>
-<!--        <dependency>-->
-<!--            <groupId>software.amazon.awssdk</groupId>-->
-<!--            <artifactId>s3</artifactId>-->
-<!--        </dependency>-->
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>dynamodb-enhanced</artifactId>
@@ -204,18 +200,6 @@
             <artifactId>jackson-datatype-jsr310</artifactId>
             <version>2.13.3</version>
         </dependency>
-<!--        &lt;!&ndash; https://mvnrepository.com/artifact/com.googlecode.soundlibs/mp3spi &ndash;&gt;-->
-<!--        <dependency>-->
-<!--            <groupId>com.googlecode.soundlibs</groupId>-->
-<!--            <artifactId>mp3spi</artifactId>-->
-<!--            <version>1.9.5.4</version>-->
-<!--        </dependency>-->
-<!--        &lt;!&ndash; https://mvnrepository.com/artifact/org/jaudiotagger &ndash;&gt;-->
-<!--        <dependency>-->
-<!--            <groupId>org</groupId>-->
-<!--            <artifactId>jaudiotagger</artifactId>-->
-<!--            <version>2.0.3</version>-->
-<!--        </dependency>-->
         <!-- Testing -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
