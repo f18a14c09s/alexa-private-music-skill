@@ -13,14 +13,15 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
+import java.lang.invoke.MethodHandles;
 import java.util.*;
 
 @Getter(AccessLevel.PROTECTED)
 @Setter(AccessLevel.PROTECTED)
 public abstract class AbstractMusicSkill<RequestImpl extends Request<?>, ResponseImpl extends Response<?>> {
+    private static final Logger LOGGER = LogManager.getLogger(MethodHandles.lookup().lookupClass());
     private List<RequestType> supportedRequestTypes = new ArrayList<>();
     private Class<RequestImpl> requestClass;
-    private final Logger logger = LogManager.getLogger(getClass());
     private final JSONAdapter jsonAdapter = new JSONAdapter();
     private CatalogService catalogService;
 
@@ -36,19 +37,19 @@ public abstract class AbstractMusicSkill<RequestImpl extends Request<?>, Respons
         try {
             catalogService = new CatalogService();
         } catch (IOException e) {
-            getLogger().error("Unable to setup catalog DAO and/or service.", e);
+            LOGGER.error("Unable to setup catalog DAO and/or service.", e);
             throw new RuntimeException(e);
         }
     }
 
-    private void debug(Request request) {
+    private void debug(Request<?> request) {
         String messageId = request.getHeader().getMessageId();
         try {
-            getLogger().debug(String.format("Processing request %s:%n%s",
+            LOGGER.debug(String.format("Processing request %s:%n%s",
                     messageId,
                     getJsonAdapter().writeValueAsString(request)));
         } catch (JsonProcessingException e) {
-            getLogger().warn(String.format("Failed to print request %s.", messageId), e);
+            LOGGER.warn(String.format("Failed to print request %s.", messageId), e);
         }
     }
 
