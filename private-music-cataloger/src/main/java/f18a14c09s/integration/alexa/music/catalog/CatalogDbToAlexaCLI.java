@@ -4,15 +4,11 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import f18a14c09s.integration.alexa.data.Locale;
-import f18a14c09s.integration.alexa.music.catalog.data.AbstractCatalog;
-import f18a14c09s.integration.alexa.music.catalog.data.MusicAlbumCatalog;
-import f18a14c09s.integration.alexa.music.catalog.data.MusicGroupCatalog;
-import f18a14c09s.integration.alexa.music.catalog.data.MusicRecordingCatalog;
+import f18a14c09s.integration.alexa.music.catalog.data.*;
 import f18a14c09s.integration.alexa.music.entities.*;
 import f18a14c09s.integration.alexa.smapi.CatalogContentUploadClient;
 import f18a14c09s.integration.alexa.smapi.data.Catalog;
 import f18a14c09s.integration.alexa.smapi.data.Upload;
-import f18a14c09s.util.StringObjectMap;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -39,6 +35,7 @@ public class CatalogDbToAlexaCLI {
     private static String vendorId = System.getenv("ALEXA_SKILL_VENDOR_ID");
     private static String skillId = System.getenv("PRIVATE_MUSIC_ALEXA_SKILL_ID");
     private static boolean uploadLatestCatalogs = false;
+    private static boolean uploadDeletions = false;
 
     private static <E> List<E> concat(
             Collection<E> c1,
@@ -50,47 +47,27 @@ public class CatalogDbToAlexaCLI {
         ).collect(Collectors.toList());
     }
 
-    private static <E extends BaseEntity> List<E> filterDeletedEntityAttributes(
-            Collection<E> entities,
-            Class<E> clazz
+    private static List<MusicEntityDeletion> filterDeletedEntityAttributes(
+            Collection<? extends BaseEntity> entities
     ) {
         return entities.stream().map(
-                deletion -> filterDeletedEntityAttributes(
-                        deletion,
-                        clazz
-                )
+                CatalogDbToAlexaCLI::filterDeletedEntityAttributes
         ).collect(Collectors.toList());
     }
 
-    private static <E extends BaseEntity> E filterDeletedEntityAttributes(
-            E entity,
-            Class<E> clazz
+    private static MusicEntityDeletion filterDeletedEntityAttributes(
+            BaseEntity entity
     ) {
         try {
-            entity = JSON_MAPPER.readValue(
+            return JSON_MAPPER.readValue(
                     JSON_MAPPER.writeValueAsString(
-                            JSON_MAPPER.readValue(
-                                    JSON_MAPPER.writeValueAsString(
-                                            entity
-                                    ),
-                                    StringObjectMap.class
-                            ).entrySet().stream().filter(
-                                    mapEntry -> List.of(
-                                            "id",
-                                            "lastUpdatedTime"
-                                    ).contains(mapEntry.getKey())
-                            ).collect(Collectors.toMap(
-                                    Map.Entry::getKey,
-                                    Map.Entry::getValue
-                            ))
+                            entity
                     ),
-                    clazz
+                    MusicEntityDeletion.class
             );
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
         }
-        entity.setDeleted(true);
-        return entity;
     }
 
     public static void main(String... args) throws IOException, InterruptedException {
@@ -105,17 +82,9 @@ public class CatalogDbToAlexaCLI {
 
         if (uploadLatestCatalogs) {
             List<Track> tracks = catalogDAO.listTracks();
-            List<Track> trackDeletions = catalogDAO.listTrackDeletions();
-            LOGGER.info(String.format("%s tracks, %s track deletions found.", tracks.size(), trackDeletions.size()));
+            LOGGER.info(String.format("%s tracks found.", tracks.size()));
             MusicRecordingCatalog trackCatalog = new MusicRecordingCatalog();
-            trackDeletions = filterDeletedEntityAttributes(
-                    trackDeletions,
-                    Track.class
-            );
-            trackCatalog.setEntities(concat(
-                    tracks,
-                    trackDeletions
-            ));
+            trackCatalog.setEntities(tracks);
             trackCatalog.setLocales(List.of(Locale.en_US()));
             //
             Set<String> uniqueAlbumIds = tracks.stream()
@@ -124,26 +93,17 @@ public class CatalogDbToAlexaCLI {
                     .map(BaseEntityReference::getId)
                     .collect(Collectors.toSet());
             List<Album> albums = catalogDAO.listAlbums();
-            List<Album> albumDeletions = catalogDAO.listAlbumDeletions();
             int totalAlbums = albums.size();
             albums = albums.stream().filter(
                     album -> uniqueAlbumIds.contains(album.getId())
             ).collect(Collectors.toList());
             LOGGER.info(String.format(
-                    "%s albums found--filtered down from %s; %s album deletions found.",
+                    "%s albums found--filtered down from %s.",
                     albums.size(),
-                    totalAlbums,
-                    albumDeletions.size()
+                    totalAlbums
             ));
             MusicAlbumCatalog albumCatalog = new MusicAlbumCatalog();
-            albumDeletions = filterDeletedEntityAttributes(
-                    albumDeletions,
-                    Album.class
-            );
-            albumCatalog.setEntities(concat(
-                    albums,
-                    albumDeletions
-            ));
+            albumCatalog.setEntities(albums);
             albumCatalog.setLocales(List.of(Locale.en_US()));
             //
             Set<String> uniqueArtistIds = tracks.stream()
@@ -152,26 +112,17 @@ public class CatalogDbToAlexaCLI {
                     .map(BaseEntityReference::getId)
                     .collect(Collectors.toSet());
             List<Artist> artists = catalogDAO.listArtists();
-            List<Artist> artistDeletions = catalogDAO.listArtistDeletions();
             int totalArtists = artists.size();
             artists = artists.stream().filter(
                     artist -> uniqueArtistIds.contains(artist.getId())
             ).collect(Collectors.toList());
             LOGGER.info(String.format(
-                    "%s artists found--filtered down from %s; %s artist deletions found.",
+                    "%s artists found--filtered down from %s.",
                     artists.size(),
-                    totalArtists,
-                    artistDeletions.size()
+                    totalArtists
             ));
             MusicGroupCatalog artistCatalog = new MusicGroupCatalog();
-            artistDeletions = filterDeletedEntityAttributes(
-                    artistDeletions,
-                    Artist.class
-            );
-            artistCatalog.setEntities(concat(
-                    artists,
-                    artistDeletions
-            ));
+            artistCatalog.setEntities(artists);
             artistCatalog.setLocales(List.of(Locale.en_US()));
 
             for (AbstractCatalog catalog : List.of(
@@ -190,23 +141,84 @@ public class CatalogDbToAlexaCLI {
                         uploadId
                 );
             }
-        } else {
-            for (String catalogType : skillCatalogsByType.keySet()) {
-                Catalog catalog = skillCatalogsByType.get(catalogType);
-                Upload mostRecentUpload = catalogContentUploadClient.listUploads(catalog.getId())
-                        .stream()
-                        .max(Comparator.comparing(Upload::getCreatedDate))
-                        .orElse(null);
-                if (mostRecentUpload == null) {
-                    LOGGER.info(String.format(
-                            "No uploads found for %s catalog (ID=%s).",
-                            catalog.getType(),
-                            catalog.getId()
-                    ));
-                    continue;
-                }
-                uploadIdsByCatalogId.put(catalog.getId(), mostRecentUpload.getId());
+        }
+
+        if (uploadDeletions) {
+            List<Track> trackDeletions = catalogDAO.listTrackDeletions();
+            LOGGER.info(String.format("%s track deletions found.", trackDeletions.size()));
+            MusicDeletionCatalogUpload trackDeletionCatalogUpload = new MusicDeletionCatalogUpload();
+            trackDeletionCatalogUpload.setVersion(2.0);
+            trackDeletionCatalogUpload.setType(CatalogTypeName.AMAZON_MUSIC_RECORDING);
+            trackDeletionCatalogUpload.setLocales(List.of(Locale.en_US()));
+            trackDeletionCatalogUpload.setEntities(
+                    filterDeletedEntityAttributes(
+                            trackDeletions
+                    )
+            );
+            //
+            List<Album> albumDeletions = catalogDAO.listAlbumDeletions();
+            LOGGER.info(String.format(
+                    "%s album deletions found.",
+                    albumDeletions.size()
+            ));
+            MusicDeletionCatalogUpload albumDeletionCatalogUpload = new MusicDeletionCatalogUpload();
+            albumDeletionCatalogUpload.setVersion(2.0);
+            albumDeletionCatalogUpload.setType(CatalogTypeName.AMAZON_MUSIC_ALBUM);
+            albumDeletionCatalogUpload.setLocales(List.of(Locale.en_US()));
+            albumDeletionCatalogUpload.setEntities(
+                    filterDeletedEntityAttributes(
+                            albumDeletions
+                    )
+            );
+            //
+            List<Artist> artistDeletions = catalogDAO.listArtistDeletions();
+            LOGGER.info(String.format(
+                    "%s artist deletions found.",
+                    artistDeletions.size()
+            ));
+            MusicDeletionCatalogUpload artistDeletionCatalogUpload = new MusicDeletionCatalogUpload();
+            artistDeletionCatalogUpload.setVersion(2.0);
+            artistDeletionCatalogUpload.setType(CatalogTypeName.AMAZON_MUSIC_GROUP);
+            artistDeletionCatalogUpload.setLocales(List.of(Locale.en_US()));
+            artistDeletionCatalogUpload.setEntities(
+                    filterDeletedEntityAttributes(
+                            artistDeletions
+                    )
+            );
+
+            for (MusicDeletionCatalogUpload catalog : List.of(
+                    trackDeletionCatalogUpload,
+                    albumDeletionCatalogUpload,
+                    artistDeletionCatalogUpload
+            )) {
+                Catalog targetCatalog = skillCatalogsByType.get(catalog.getType());
+
+                String uploadId = catalogContentUploadClient.uploadCatalogContent(
+                        targetCatalog.getId(),
+                        catalog
+                );
+                uploadIdsByCatalogId.put(
+                        targetCatalog.getId(),
+                        uploadId
+                );
             }
+        }
+
+        for (String catalogType : skillCatalogsByType.keySet()) {
+            Catalog catalog = skillCatalogsByType.get(catalogType);
+            Upload mostRecentUpload = catalogContentUploadClient.listUploads(catalog.getId())
+                    .stream()
+                    .max(Comparator.comparing(Upload::getCreatedDate))
+                    .orElse(null);
+            if (mostRecentUpload == null) {
+                LOGGER.info(String.format(
+                        "No uploads found for %s catalog (ID=%s).",
+                        catalog.getType(),
+                        catalog.getId()
+                ));
+                continue;
+            }
+            uploadIdsByCatalogId.put(catalog.getId(), mostRecentUpload.getId());
         }
 
         for (String catalogType : skillCatalogsByType.keySet()) {
@@ -221,93 +233,105 @@ public class CatalogDbToAlexaCLI {
     public static void checkIngestionOfCatalogUpload(
             Catalog catalog,
             String uploadId
-    ) throws IOException, InterruptedException {
-        for (; ; ) {
-            Upload upload = catalogContentUploadClient.getUpload(
-                    catalog.getId(),
-                    uploadId
-            );
+    ) throws IOException {
+        Upload upload = catalogContentUploadClient.getUpload(
+                catalog.getId(),
+                uploadId
+        );
 
-            if (upload.getStatus().equals("SUCCEEDED")) {
-                LOGGER.info(String.format(
-                        "%s catalog successfully uploaded and ingested.",
-                        catalog.getType()
-                ));
-                return;
-            } else if (upload.getStatus().equals("IN_PROGRESS")) {
-                LOGGER.info(String.format(
-                        ("%s catalog (ID=%s) has upload (ID=%s) status: %s."
-                                + "%n\tCheck back later as the process may take some time."
-                                + "%n\tIngestion status: %s%n"),
-                        catalog.getType(),
-                        catalog.getId(),
-                        upload.getId(),
-                        upload.getStatus(),
-                        JSON_MAPPER.writeValueAsString(
-                                Optional.ofNullable(upload.getIngestionSteps())
-                                        .orElse(List.of())
-                                        .stream()
-                                        .collect(Collectors.toMap(
-                                                Upload.IngestionStep::getName,
-                                                Upload.IngestionStep::getStatus
-                                        ))
-                        )
-                ));
-                return;
-            }
-
-            LOGGER.warning(String.format(
-                    "%s catalog (ID=%s) has upload (ID=%s) status: %s.%n",
+        if (upload.getStatus().equals("SUCCEEDED")) {
+            LOGGER.info(String.format(
+                    "%s catalog successfully uploaded and ingested.",
+                    catalog.getType()
+            ));
+            return;
+        } else if (upload.getStatus().equals("IN_PROGRESS")) {
+            LOGGER.info(String.format(
+                    ("%s catalog (ID=%s) has upload (ID=%s) status: %s."
+                            + "%n\tCheck back later as the process may take some time."
+                            + "%n\tIngestion status: %s%n"),
                     catalog.getType(),
                     catalog.getId(),
                     upload.getId(),
-                    upload.getStatus()
-            ));
-
-            List<Upload.IngestionStep> failedIngestionSteps = Optional.ofNullable(upload.getIngestionSteps())
-                    .orElse(List.of())
-                    .stream()
-                    .filter(
-                            ingestionStep -> ingestionStep.getStatus().equals("FAILED")
+                    upload.getStatus(),
+                    JSON_MAPPER.writeValueAsString(
+                            Optional.ofNullable(upload.getIngestionSteps())
+                                    .orElse(List.of())
+                                    .stream()
+                                    .collect(Collectors.toMap(
+                                            Upload.IngestionStep::getName,
+                                            Upload.IngestionStep::getStatus
+                                    ))
                     )
-                    .collect(Collectors.toList());
+            ));
+            return;
+        }
 
-            for (Upload.IngestionStep ingestionStep : failedIngestionSteps) {
-                LOGGER.warning(String.format(
-                        "%s ingestion step %s due to:%s%n",
-                        ingestionStep.getName(),
-                        ingestionStep.getStatus().toLowerCase(),
-                        Optional.ofNullable(ingestionStep.getErrors()).orElse(List.of()).stream().map(
-                                ingestionError -> String.format(
-                                        "%n\t%s:%n\t\t%s",
-                                        ingestionError.getCode(),
-                                        ingestionError.getMessage()
-                                )
-                        ).collect(Collectors.joining())
-                ));
-                if (ingestionStep.getLogUrl() != null && !ingestionStep.getLogUrl().isEmpty()) {
-                    StringBuilder logBuffer = new StringBuilder();
-                    try {
-                        URLConnection urlConnection = new URL(ingestionStep.getLogUrl()).openConnection();
-                        urlConnection.setDoInput(true);
-                        try (InputStream inputStream = urlConnection.getInputStream();
-                             InputStreamReader inputStreamReader = new InputStreamReader(inputStream);
-                             BufferedReader responseBodyReader = new BufferedReader(inputStreamReader)) {
-                            for (int c = responseBodyReader.read(); c >= 0; c = responseBodyReader.read()) {
-                                logBuffer.append((char) c);
-                            }
+        LOGGER.warning(String.format(
+                "%s catalog (ID=%s) has upload (ID=%s) status: %s.%n",
+                catalog.getType(),
+                catalog.getId(),
+                upload.getId(),
+                upload.getStatus()
+        ));
+
+        List<Upload.IngestionStep> failedIngestionSteps = Optional.ofNullable(upload.getIngestionSteps())
+                .orElse(List.of())
+                .stream()
+                .filter(
+                        ingestionStep -> ingestionStep.getStatus().equals("FAILED")
+                )
+                .collect(Collectors.toList());
+
+        for (Upload.IngestionStep ingestionStep : failedIngestionSteps) {
+            LOGGER.warning(String.format(
+                    "%s ingestion step %s due to:%s%n",
+                    ingestionStep.getName(),
+                    ingestionStep.getStatus().toLowerCase(),
+                    Optional.ofNullable(ingestionStep.getErrors()).orElse(List.of()).stream().map(
+                            ingestionError -> String.format(
+                                    "%n\t%s:%n\t\t%s",
+                                    ingestionError.getCode(),
+                                    ingestionError.getMessage()
+                            )
+                    ).collect(Collectors.joining())
+            ));
+            if (ingestionStep.getLogUrl() != null && !ingestionStep.getLogUrl().isEmpty()) {
+                StringBuilder logBuffer = new StringBuilder();
+                try {
+                    URLConnection urlConnection = new URL(ingestionStep.getLogUrl()).openConnection();
+                    urlConnection.setDoInput(true);
+                    try (InputStream inputStream = urlConnection.getInputStream();
+                         InputStreamReader inputStreamReader = new InputStreamReader(inputStream);
+                         BufferedReader responseBodyReader = new BufferedReader(inputStreamReader)) {
+                        for (int c = responseBodyReader.read(); c >= 0; c = responseBodyReader.read()) {
+                            logBuffer.append((char) c);
                         }
-                    } catch (IOException e) {
-                        LOGGER.severe(String.format(
-                                "Failed to retrieve ingestion log file at URL %s.%n",
-                                ingestionStep.getLogUrl()
-                        ));
                     }
-                    LOGGER.warning(String.format(
-                            "Ingestion log:%n%s%n",
-                            logBuffer
+                } catch (IOException e) {
+                    LOGGER.severe(String.format(
+                            "Failed to retrieve ingestion log file at URL %s.%n",
+                            ingestionStep.getLogUrl()
                     ));
                 }
+//                if (logBuffer.length() <= 1000) {
+                LOGGER.warning(String.format(
+                        "Ingestion log:%n%s%n",
+                        logBuffer
+                ));
+//                } else {
+//                    File localLogFile = File.createTempFile("log", ".txt");
+//                    LOGGER.warning(String.format(
+//                            "Ingestion log saved to:%n%s%n",
+//                            localLogFile.getAbsolutePath()
+//                    ));
+//                    try (FileWriter fileWriter = new FileWriter(
+//                            localLogFile
+//                    );
+//                         BufferedWriter bufferedWriter = new BufferedWriter(fileWriter)) {
+//                        bufferedWriter.write(logBuffer.toString());
+//                    }
+//                }
             }
         }
     }

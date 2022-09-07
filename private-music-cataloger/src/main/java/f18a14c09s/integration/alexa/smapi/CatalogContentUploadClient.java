@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import f18a14c09s.integration.alexa.music.catalog.data.AbstractCatalog;
+import f18a14c09s.integration.alexa.music.catalog.data.MusicDeletionCatalogUpload;
 import f18a14c09s.integration.alexa.smapi.data.*;
 import f18a14c09s.util.StringObjectMap;
 
@@ -326,6 +327,66 @@ public class CatalogContentUploadClient {
         String[] etags = new String[catalogContentList.length];
         for (int i = 0; i < catalogContentList.length; i++) {
             AbstractCatalog catalogContent = catalogContentList[i];
+            CreateCatalogUploadResponse.PresignedUploadPart presignedUploadPart = uploadCreationResponse.getPresignedUploadParts()
+                    .get(i);
+            HttpURLConnection urlConnection = (HttpURLConnection) new URL(presignedUploadPart.getUrl()).openConnection();
+            urlConnection.setRequestMethod("PUT");
+            urlConnection.setDoOutput(true);
+            urlConnection.setRequestProperty(
+                    "Content-Type",
+                    "application/json"
+            );
+            try (
+                    OutputStream requestBody = urlConnection.getOutputStream();
+                    BufferedOutputStream bufferedRequestBody = new BufferedOutputStream(requestBody)
+            ) {
+                jsonMapper.writeValue(
+                        bufferedRequestBody,
+                        catalogContent
+                );
+            }
+            int responseCode = urlConnection.getResponseCode();
+            if (responseCode < 200 || responseCode >= 300) {
+                throw new IOException(String.format(
+                        "Pre-signed S3 URL responded with HTTP %s %s:%n%s.",
+                        responseCode,
+                        urlConnection.getResponseMessage(),
+                        jsonMapper.writeValueAsString(
+                                readJson(
+                                        urlConnection.getErrorStream(),
+                                        StringObjectMap.class
+                                )
+                        )
+                ));
+            }
+            etags[i] = urlConnection.getHeaderField("ETag");
+        }
+        completeUpload(
+                catalogId,
+                uploadCreationResponse.getId(),
+                IntStream.range(0, etags.length).mapToObj(
+                        partIndex -> Map.<String, Object>of(
+                                "eTag",
+                                etags[partIndex],
+                                "partNumber",
+                                partIndex + 1
+                        )
+                ).collect(Collectors.toList())
+        );
+        return uploadCreationResponse.getId();
+    }
+
+    public String uploadCatalogContent(
+            String catalogId,
+            MusicDeletionCatalogUpload... catalogContentList
+    ) throws IOException {
+        CreateCatalogUploadResponse uploadCreationResponse = createUpload(
+                catalogId,
+                catalogContentList.length
+        );
+        String[] etags = new String[catalogContentList.length];
+        for (int i = 0; i < catalogContentList.length; i++) {
+            MusicDeletionCatalogUpload catalogContent = catalogContentList[i];
             CreateCatalogUploadResponse.PresignedUploadPart presignedUploadPart = uploadCreationResponse.getPresignedUploadParts()
                     .get(i);
             HttpURLConnection urlConnection = (HttpURLConnection) new URL(presignedUploadPart.getUrl()).openConnection();
