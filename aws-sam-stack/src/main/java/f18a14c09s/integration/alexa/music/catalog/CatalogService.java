@@ -10,7 +10,13 @@ import f18a14c09s.integration.alexa.music.entities.Artist;
 import f18a14c09s.integration.alexa.music.entities.Track;
 import f18a14c09s.integration.alexa.music.playback.data.PlaybackInfo;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 
 public class CatalogService {
@@ -80,7 +86,30 @@ public class CatalogService {
         item.setRules(ItemRules.disallowFeedback());
         Calendar validUntil = Calendar.getInstance();
         validUntil.add(Calendar.YEAR, 1);
-        item.setStream(new Stream(track.getId(), track.getUrl(), 0L, validUntil));
+
+        byte[] hmacSignatureBytes;
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(
+                    "jurospLthusoxlp6hecreplgigljecu".getBytes(StandardCharsets.UTF_8),
+                    "HmacSHA256"
+            ));
+            hmacSignatureBytes = mac.doFinal(
+                    track.getUrl().getBytes(StandardCharsets.UTF_8)
+            );
+        } catch (NoSuchAlgorithmException|InvalidKeyException e) {
+            throw new RuntimeException(e);
+        }
+
+        final String url = String.format(
+                "%s?hmac_signature=%s",
+                track.getUrl(),
+                URLEncoder.encode(
+                        Base64.getEncoder().encodeToString(hmacSignatureBytes),
+                        StandardCharsets.UTF_8
+                )
+        );
+        item.setStream(new Stream(track.getId(), url, 0L, validUntil));
         return item;
     }
 

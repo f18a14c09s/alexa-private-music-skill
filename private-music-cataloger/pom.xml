@@ -154,8 +154,8 @@
 
     <dependencies>
         <dependency>
-            <groupId>f18a14c09s</groupId>
-            <artifactId>alexa-music-skill-model-4j</artifactId>
+            <groupId>f18a14c09s.integration.alexa.music</groupId>
+            <artifactId>model</artifactId>
             <version>1.2-SNAPSHOT</version>
         </dependency>
         <dependency>
