@@ -28,9 +28,9 @@ import java.util.stream.Collectors;
 
 public class CatalogService {
     private static String SECRET_KEY = SsmClient.create().getParameter(
-        GetParameterRequest.builder().withDecryption(true).name(
-                "/alexa-private-music-skill/access-control/secret-key"
-        ).build()
+            GetParameterRequest.builder().withDecryption(true).name(
+                    "/alexa-private-music-skill/access-control/secret-key"
+            ).build()
     ).parameter().value();
     private DynamoDBCatalogDAO catalogDAO;
 
@@ -79,13 +79,18 @@ public class CatalogService {
             ));
         }
     }
+
+    private static String encodeUriComponent(String uriComponent) {
+        return URLEncoder.encode(uriComponent, StandardCharsets.UTF_8);
+    }
+
     private static String encodeTrackUrl(String trackUrl) {
         Matcher urlPrefixMatcher = Pattern.compile(
                 "^https://[^/]+/"
         ).matcher(trackUrl);
         List<MatchResult> urlPrefixMatches = urlPrefixMatcher.results().collect(Collectors.toList());
 
-        if(urlPrefixMatches.isEmpty()) {
+        if (urlPrefixMatches.isEmpty()) {
             throw new IllegalStateException(
                     String.format(
                             "URL %s does not start with https://<hostname>/.",
@@ -98,7 +103,9 @@ public class CatalogService {
         String urlSuffix = urlPrefixMatcher.replaceFirst("");
 
         String[] urlPathComponents = urlSuffix.split("/");
-        String encodedUrlPath = Arrays.stream(urlPathComponents).map(pathComponent -> URLEncoder.encode(pathComponent, StandardCharsets.UTF_8)).collect(Collectors.joining());
+        String encodedUrlPath = Arrays.stream(urlPathComponents).map(
+                CatalogService::encodeUriComponent
+        ).collect(Collectors.joining("/"));
 
         return urlPrefix + encodedUrlPath;
     }
@@ -132,7 +139,7 @@ public class CatalogService {
             hmacSignatureBytes = mac.doFinal(
                     track.getUrl().getBytes(StandardCharsets.UTF_8)
             );
-        } catch (NoSuchAlgorithmException|InvalidKeyException e) {
+        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
             throw new RuntimeException(e);
         }
 
