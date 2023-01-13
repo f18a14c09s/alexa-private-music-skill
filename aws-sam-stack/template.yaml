@@ -24,7 +24,8 @@ Resources:
         - DynamoDBReadPolicy:
             TableName: !Ref StringPartitionKeyNumericSortKeyTable
         - SSMParameterReadPolicy:
-            ParameterName: /alexa-private-music-skill/access-control/secret-key
+            # Exclude leading forward-slash:
+            ParameterName: alexa-private-music-skill/access-control/secret-key
 
   StringPartitionKeyStringSortKeyTable:
     Type: AWS::DynamoDB::Table
