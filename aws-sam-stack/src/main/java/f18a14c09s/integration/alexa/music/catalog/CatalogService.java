@@ -15,11 +15,15 @@ import software.amazon.awssdk.services.ssm.model.GetParameterRequest;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
+import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class CatalogService {
     private static String SECRET_KEY = SsmClient.create().getParameter(
@@ -75,6 +79,23 @@ public class CatalogService {
         }
     }
 
+    private String encodeTrackUrl(String trackUrl) {
+        Matcher urlPrefixMatch = Pattern.compile(
+                "^https://[^/]+/"
+        ).matcher(trackUrl);
+
+        boolean urlMatchesRequiredPrefix = urlPrefixMatch.matches();
+        assert urlMatchesRequiredPrefix;
+
+        String urlPrefix = urlPrefixMatch.group(0);
+        String urlSuffix = urlPrefixMatch.replaceFirst("");
+
+        String[] urlPathComponents = urlSuffix.split("/");
+        String encodedUrlPath = Arrays.stream(urlPathComponents).map(pathComponent -> URLEncoder.encode(pathComponent, StandardCharsets.UTF_8)).collect(Collectors.joining());
+
+        return urlPrefix + encodedUrlPath;
+    }
+
     private Item toItem(List<Track> tracks, int trackIndex) {
         if (trackIndex < 0 || trackIndex >= tracks.size()) {
             return null;
@@ -110,7 +131,7 @@ public class CatalogService {
 
         final String url = String.format(
                 "%s?hmac_signature=%s",
-                track.getUrl(),
+                encodeTrackUrl(track.getUrl()),
                 URLEncoder.encode(
                         Base64.getEncoder().encodeToString(hmacSignatureBytes),
                         StandardCharsets.UTF_8
