@@ -129,6 +129,8 @@ public class CatalogService {
         Calendar validUntil = Calendar.getInstance();
         validUntil.add(Calendar.YEAR, 1);
 
+        final String properlyEncodedTrackUrl = encodeTrackUrl(track.getUrl());
+
         byte[] hmacSignatureBytes;
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
@@ -137,21 +139,23 @@ public class CatalogService {
                     "HmacSHA256"
             ));
             hmacSignatureBytes = mac.doFinal(
-                    track.getUrl().getBytes(StandardCharsets.UTF_8)
+                    properlyEncodedTrackUrl.getBytes(StandardCharsets.UTF_8)
             );
         } catch (NoSuchAlgorithmException | InvalidKeyException e) {
             throw new RuntimeException(e);
         }
 
-        final String url = String.format(
+        final String urlWithQueryString = String.format(
                 "%s?hmac_signature=%s",
-                encodeTrackUrl(track.getUrl()),
+                properlyEncodedTrackUrl,
                 URLEncoder.encode(
                         Base64.getEncoder().encodeToString(hmacSignatureBytes),
                         StandardCharsets.UTF_8
                 )
         );
-        item.setStream(new Stream(track.getId(), url, 0L, validUntil));
+
+        item.setStream(new Stream(track.getId(), urlWithQueryString, 0L, validUntil));
+
         return item;
     }
 
