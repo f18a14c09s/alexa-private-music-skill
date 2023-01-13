@@ -9,6 +9,8 @@ import f18a14c09s.integration.alexa.music.entities.Album;
 import f18a14c09s.integration.alexa.music.entities.Artist;
 import f18a14c09s.integration.alexa.music.entities.Track;
 import f18a14c09s.integration.alexa.music.playback.data.PlaybackInfo;
+import software.amazon.awssdk.services.ssm.SsmClient;
+import software.amazon.awssdk.services.ssm.model.GetParameterRequest;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -20,6 +22,11 @@ import java.security.NoSuchAlgorithmException;
 import java.util.*;
 
 public class CatalogService {
+    private static String SECRET_KEY = SsmClient.create().getParameter(
+        GetParameterRequest.builder().withDecryption(true).name(
+                "/alexa-private-music-skill/access-control/secret-key"
+        ).build()
+    ).parameter().value();
     private DynamoDBCatalogDAO catalogDAO;
 
     public CatalogService() throws IOException {
@@ -91,7 +98,7 @@ public class CatalogService {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(
-                    "jurospLthusoxlp6hecreplgigljecu".getBytes(StandardCharsets.UTF_8),
+                    SECRET_KEY.getBytes(StandardCharsets.UTF_8),
                     "HmacSHA256"
             ));
             hmacSignatureBytes = mac.doFinal(
