@@ -21,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
+import java.util.regex.MatchResult;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -78,17 +79,23 @@ public class CatalogService {
             ));
         }
     }
-
-    private String encodeTrackUrl(String trackUrl) {
-        Matcher urlPrefixMatch = Pattern.compile(
+    private static String encodeTrackUrl(String trackUrl) {
+        Matcher urlPrefixMatcher = Pattern.compile(
                 "^https://[^/]+/"
         ).matcher(trackUrl);
+        List<MatchResult> urlPrefixMatches = urlPrefixMatcher.results().collect(Collectors.toList());
 
-        boolean urlMatchesRequiredPrefix = urlPrefixMatch.matches();
-        assert urlMatchesRequiredPrefix;
+        if(urlPrefixMatches.isEmpty()) {
+            throw new IllegalStateException(
+                    String.format(
+                            "URL %s does not start with https://<hostname>/.",
+                            trackUrl
+                    )
+            );
+        }
 
-        String urlPrefix = urlPrefixMatch.group(0);
-        String urlSuffix = urlPrefixMatch.replaceFirst("");
+        String urlPrefix = urlPrefixMatches.get(0).group(0);
+        String urlSuffix = urlPrefixMatcher.replaceFirst("");
 
         String[] urlPathComponents = urlSuffix.split("/");
         String encodedUrlPath = Arrays.stream(urlPathComponents).map(pathComponent -> URLEncoder.encode(pathComponent, StandardCharsets.UTF_8)).collect(Collectors.joining());
