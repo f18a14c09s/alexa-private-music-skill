@@ -40,7 +40,11 @@ public class AudioStreamUrlBuilder {
     }
 
     public AudioStreamUrlBuilder withNonce() {
-        this.nonce = new SecureRandom().nextLong();
+        this.nonce = new SecureRandom().longs(
+                1,
+                100000000000000L,
+                1000000000000000L
+        ).findAny().getAsLong();
         return this;
     }
 
