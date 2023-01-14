@@ -14,38 +14,11 @@ Resources:
       CodeUri: ./target/lambda.jar
       MemorySize: 4096
       Timeout: 15
-#      ProvisionedConcurrencyConfig:
-#        ProvisionedConcurrentExecutions: 1
       SnapStart:
         ApplyOn: PublishedVersions
       Events:
         AlexaSkillEvent:
           Type: AlexaSkill
-#        ScheduleBasedWarmer:
-#          Type: ScheduleV2
-#          Properties:
-#            Description: !Sub "Keep ${AWS::StackName} Lambda function warmer."
-#            ScheduleExpression: rate(5 minutes)
-#            Input:
-#              Fn::ToJsonString:
-#                header:
-#                  messageId: FakeMessageId123
-#                  namespace: Alexa.Media.Search
-#                  name: GetPlayableContent
-#                  payloadVersion: 1.0
-#                payload:
-#                  requestContext:
-#                    user:
-#                      id: fake.Alexa.user.ID
-#                    location:
-#                      originatingLocale: en-US
-#                      countryCode: US
-#                  filters:
-#                    explicitLanguageAllowed: true
-#                  selectionCriteria:
-#                    attributes:
-#                      - type: ARTIST
-#                        entityId: fake-artist-entity-id
       Environment:
         Variables:
           STR_PK_STR_SK_DYNAMODB_TABLE_NAME: !Ref StringPartitionKeyStringSortKeyTable
