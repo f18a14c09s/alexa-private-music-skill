@@ -9,6 +9,8 @@ import f18a14c09s.integration.alexa.music.entities.Album;
 import f18a14c09s.integration.alexa.music.entities.Artist;
 import f18a14c09s.integration.alexa.music.entities.Track;
 import f18a14c09s.integration.alexa.music.playback.data.PlaybackInfo;
+import f18a14c09s.util.JwtFacade;
+import f18a14c09s.util.UrlStandardization;
 import software.amazon.awssdk.services.ssm.SsmClient;
 import software.amazon.awssdk.services.ssm.model.GetParameterRequest;
 
@@ -80,36 +82,6 @@ public class CatalogService {
         }
     }
 
-    private static String encodeUriComponent(String uriComponent) {
-        return URLEncoder.encode(uriComponent, StandardCharsets.UTF_8);
-    }
-
-    private static String encodeTrackUrl(String trackUrl) {
-        Matcher urlPrefixMatcher = Pattern.compile(
-                "^https://[^/]+/"
-        ).matcher(trackUrl);
-        List<MatchResult> urlPrefixMatches = urlPrefixMatcher.results().collect(Collectors.toList());
-
-        if (urlPrefixMatches.isEmpty()) {
-            throw new IllegalStateException(
-                    String.format(
-                            "URL %s does not start with https://<hostname>/.",
-                            trackUrl
-                    )
-            );
-        }
-
-        String urlPrefix = urlPrefixMatches.get(0).group(0);
-        String urlSuffix = urlPrefixMatcher.replaceFirst("");
-
-        String[] urlPathComponents = urlSuffix.split("/");
-        String encodedUrlPath = Arrays.stream(urlPathComponents).map(
-                CatalogService::encodeUriComponent
-        ).collect(Collectors.joining("/"));
-
-        return urlPrefix + encodedUrlPath;
-    }
-
     private Item toItem(List<Track> tracks, int trackIndex) {
         if (trackIndex < 0 || trackIndex >= tracks.size()) {
             return null;
@@ -129,27 +101,30 @@ public class CatalogService {
         Calendar validUntil = Calendar.getInstance();
         validUntil.add(Calendar.YEAR, 1);
 
-        final String properlyEncodedTrackUrl = encodeTrackUrl(track.getUrl());
+        final String properlyEncodedTrackUrl = UrlStandardization.encodeRawPathComponents(
+                track.getUrl()
+        );
 
-        byte[] hmacSignatureBytes;
-        try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(
-                    SECRET_KEY.getBytes(StandardCharsets.UTF_8),
-                    "HmacSHA256"
-            ));
-            hmacSignatureBytes = mac.doFinal(
-                    properlyEncodedTrackUrl.getBytes(StandardCharsets.UTF_8)
-            );
-        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
-            throw new RuntimeException(e);
-        }
+//        byte[] hmacSignatureBytes;
+//        try {
+//            Mac mac = Mac.getInstance("HmacSHA256");
+//            mac.init(new SecretKeySpec(
+//                    SECRET_KEY.getBytes(StandardCharsets.UTF_8),
+//                    "HmacSHA256"
+//            ));
+//            hmacSignatureBytes = mac.doFinal(
+//                    properlyEncodedTrackUrl.getBytes(StandardCharsets.UTF_8)
+//            );
+//        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
+//            throw new RuntimeException(e);
+//        }
 
         final String urlWithQueryString = String.format(
-                "%s?hmac_signature=%s",
+                "%s?access_token=%s",
                 properlyEncodedTrackUrl,
                 URLEncoder.encode(
-                        Base64.getEncoder().encodeToString(hmacSignatureBytes),
+//                        Base64.getEncoder().encodeToString(hmacSignatureBytes),
+                        JwtFacade.createJwt(properlyEncodedTrackUrl, SECRET_KEY),
                         StandardCharsets.UTF_8
                 )
         );
