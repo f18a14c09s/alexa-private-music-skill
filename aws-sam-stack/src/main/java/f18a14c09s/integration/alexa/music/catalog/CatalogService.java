@@ -119,17 +119,27 @@ public class CatalogService {
 //            throw new RuntimeException(e);
 //        }
 
-        final String urlWithQueryString = String.format(
-                "%s?access_token=%s",
-                properlyEncodedTrackUrl,
-                URLEncoder.encode(
-//                        Base64.getEncoder().encodeToString(hmacSignatureBytes),
-                        JwtFacade.createJwt(properlyEncodedTrackUrl, SECRET_KEY),
-                        StandardCharsets.UTF_8
-                )
-        );
+//        final String urlWithQueryString = String.format(
+//                "%s?access_token=%s",
+//                properlyEncodedTrackUrl,
+//                URLEncoder.encode(
+////                        Base64.getEncoder().encodeToString(hmacSignatureBytes),
+//                        JwtFacade.createJwt(properlyEncodedTrackUrl, SECRET_KEY),
+//                        StandardCharsets.UTF_8
+//                )
+//        );
 
-        item.setStream(new Stream(track.getId(), urlWithQueryString, 0L, validUntil));
+//        Stream stream = new Stream(track.getId(), urlWithQueryString, 0L, validUntil);
+        Stream stream = new Stream(track.getId(), properlyEncodedTrackUrl, 0L, validUntil);
+        Stream.HttpHeader authorizationHeader = new Stream.HttpHeader();
+        authorizationHeader.setName("Authorization");
+        authorizationHeader.setValue(JwtFacade.createJwt(properlyEncodedTrackUrl, SECRET_KEY));
+        Stream.HeaderCategory headerCategory = new Stream.HeaderCategory();
+        headerCategory.setType(Stream.HeaderCategoryType.ALL);
+        headerCategory.setHeaders(List.of(authorizationHeader));
+        stream.setRequestHeaders(List.of(headerCategory));
+
+        item.setStream(stream);
 
         return item;
     }
