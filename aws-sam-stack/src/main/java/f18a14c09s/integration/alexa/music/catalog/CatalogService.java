@@ -9,24 +9,11 @@ import f18a14c09s.integration.alexa.music.entities.Album;
 import f18a14c09s.integration.alexa.music.entities.Artist;
 import f18a14c09s.integration.alexa.music.entities.Track;
 import f18a14c09s.integration.alexa.music.playback.data.PlaybackInfo;
-import f18a14c09s.util.JwtFacade;
-import f18a14c09s.util.UrlStandardization;
 import software.amazon.awssdk.services.ssm.SsmClient;
 import software.amazon.awssdk.services.ssm.model.GetParameterRequest;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
-import java.net.URI;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
 import java.util.*;
-import java.util.regex.MatchResult;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 public class CatalogService {
     private static String SECRET_KEY = SsmClient.create().getParameter(
@@ -86,6 +73,7 @@ public class CatalogService {
         if (trackIndex < 0 || trackIndex >= tracks.size()) {
             return null;
         }
+
         Track track = tracks.get(trackIndex);
         Item item = new Item();
         item.setControls(Arrays.asList(CommandItemControl.previous(trackIndex > 0),
@@ -99,47 +87,16 @@ public class CatalogService {
         item.setPlaybackInfo(PlaybackInfo.defaultType());
         item.setRules(ItemRules.disallowFeedback());
         Calendar validUntil = Calendar.getInstance();
-        validUntil.add(Calendar.YEAR, 1);
+        validUntil.add(Calendar.HOUR, 1);
 
-        final String properlyEncodedTrackUrl = UrlStandardization.encodeRawPathComponents(
-                track.getUrl()
-        );
+        final String urlWithQueryString = AudioStreamUrlBuilder.newInstance()
+                .withSecretKey(SECRET_KEY)
+                .withTrack(track)
+                .withTimestamp()
+                .withNonce()
+                .build();
 
-//        byte[] hmacSignatureBytes;
-//        try {
-//            Mac mac = Mac.getInstance("HmacSHA256");
-//            mac.init(new SecretKeySpec(
-//                    SECRET_KEY.getBytes(StandardCharsets.UTF_8),
-//                    "HmacSHA256"
-//            ));
-//            hmacSignatureBytes = mac.doFinal(
-//                    properlyEncodedTrackUrl.getBytes(StandardCharsets.UTF_8)
-//            );
-//        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
-//            throw new RuntimeException(e);
-//        }
-
-//        final String urlWithQueryString = String.format(
-//                "%s?access_token=%s",
-//                properlyEncodedTrackUrl,
-//                URLEncoder.encode(
-////                        Base64.getEncoder().encodeToString(hmacSignatureBytes),
-//                        JwtFacade.createJwt(properlyEncodedTrackUrl, SECRET_KEY),
-//                        StandardCharsets.UTF_8
-//                )
-//        );
-
-//        Stream stream = new Stream(track.getId(), urlWithQueryString, 0L, validUntil);
-        Stream stream = new Stream(track.getId(), properlyEncodedTrackUrl, 0L, validUntil);
-        Stream.HttpHeader authorizationHeader = new Stream.HttpHeader();
-        authorizationHeader.setName("Authorization");
-        authorizationHeader.setValue(JwtFacade.createJwt(properlyEncodedTrackUrl, SECRET_KEY));
-        Stream.HeaderCategory headerCategory = new Stream.HeaderCategory();
-        headerCategory.setType(Stream.HeaderCategoryType.ALL);
-        headerCategory.setHeaders(List.of(authorizationHeader));
-        stream.setRequestHeaders(List.of(headerCategory));
-
-        item.setStream(stream);
+        item.setStream(new Stream(track.getId(), urlWithQueryString, 0L, validUntil));
 
         return item;
     }
