@@ -12,19 +12,8 @@ import f18a14c09s.integration.alexa.music.playback.data.PlaybackInfo;
 import software.amazon.awssdk.services.ssm.SsmClient;
 import software.amazon.awssdk.services.ssm.model.GetParameterRequest;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
-import java.net.URI;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
 import java.util.*;
-import java.util.regex.MatchResult;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 public class CatalogService {
     private static String SECRET_KEY = SsmClient.create().getParameter(
@@ -80,40 +69,11 @@ public class CatalogService {
         }
     }
 
-    private static String encodeUriComponent(String uriComponent) {
-        return URLEncoder.encode(uriComponent, StandardCharsets.UTF_8);
-    }
-
-    private static String encodeTrackUrl(String trackUrl) {
-        Matcher urlPrefixMatcher = Pattern.compile(
-                "^https://[^/]+/"
-        ).matcher(trackUrl);
-        List<MatchResult> urlPrefixMatches = urlPrefixMatcher.results().collect(Collectors.toList());
-
-        if (urlPrefixMatches.isEmpty()) {
-            throw new IllegalStateException(
-                    String.format(
-                            "URL %s does not start with https://<hostname>/.",
-                            trackUrl
-                    )
-            );
-        }
-
-        String urlPrefix = urlPrefixMatches.get(0).group(0);
-        String urlSuffix = urlPrefixMatcher.replaceFirst("");
-
-        String[] urlPathComponents = urlSuffix.split("/");
-        String encodedUrlPath = Arrays.stream(urlPathComponents).map(
-                CatalogService::encodeUriComponent
-        ).collect(Collectors.joining("/"));
-
-        return urlPrefix + encodedUrlPath;
-    }
-
     private Item toItem(List<Track> tracks, int trackIndex) {
         if (trackIndex < 0 || trackIndex >= tracks.size()) {
             return null;
         }
+
         Track track = tracks.get(trackIndex);
         Item item = new Item();
         item.setControls(Arrays.asList(CommandItemControl.previous(trackIndex > 0),
@@ -127,32 +87,14 @@ public class CatalogService {
         item.setPlaybackInfo(PlaybackInfo.defaultType());
         item.setRules(ItemRules.disallowFeedback());
         Calendar validUntil = Calendar.getInstance();
-        validUntil.add(Calendar.YEAR, 1);
+        validUntil.add(Calendar.HOUR, 1);
 
-        final String properlyEncodedTrackUrl = encodeTrackUrl(track.getUrl());
-
-        byte[] hmacSignatureBytes;
-        try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(
-                    SECRET_KEY.getBytes(StandardCharsets.UTF_8),
-                    "HmacSHA256"
-            ));
-            hmacSignatureBytes = mac.doFinal(
-                    properlyEncodedTrackUrl.getBytes(StandardCharsets.UTF_8)
-            );
-        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
-            throw new RuntimeException(e);
-        }
-
-        final String urlWithQueryString = String.format(
-                "%s?hmac_signature=%s",
-                properlyEncodedTrackUrl,
-                URLEncoder.encode(
-                        Base64.getEncoder().encodeToString(hmacSignatureBytes),
-                        StandardCharsets.UTF_8
-                )
-        );
+        final String urlWithQueryString = AudioStreamUrlBuilder.newInstance()
+                .withSecretKey(SECRET_KEY)
+                .withTrack(track)
+                .withTimestamp()
+                .withNonce()
+                .build();
 
         item.setStream(new Stream(track.getId(), urlWithQueryString, 0L, validUntil));
 
