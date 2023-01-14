@@ -1,16 +1,21 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Transform: 'AWS::Serverless-2016-10-31'
+Transform:
+  - AWS::Serverless-2016-10-31
+  - AWS::LanguageExtensions
 
 Resources:
   PrivateMusicAlexaSkillLambda:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: privateMusicAlexaSkill
+      AutoPublishAlias: latest
       Runtime: java11
       Handler: f18a14c09s.integration.aws.PrivateMusicAlexaSkillRequestHandler::handleRequest
       CodeUri: ./target/lambda.jar
-      MemorySize: 2048
-      Timeout: 60
+      MemorySize: 4096
+      Timeout: 15
+      SnapStart:
+        ApplyOn: PublishedVersions
       Events:
         AlexaSkillEvent:
           Type: AlexaSkill
