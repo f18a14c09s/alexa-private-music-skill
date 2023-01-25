@@ -53,19 +53,31 @@ class PrivateMusicCataloguer {
     private S3Client s3Client = S3Client.create();
     private Locale en_US;
     private Art defaultArt;
+    private final boolean live;
+
+//    PrivateMusicCataloguer(String sourceS3BucketName,
+//                           String sourceS3Prefix,
+//                           String baseUrl,
+//                           String imageBaseUrl,
+//                           String destStrStrDynamodbTableName,
+//                           String destStrNumDynamodbTableName) throws IOException, NoSuchAlgorithmException {
+//        this(sourceS3BucketName, sourceS3Prefix, baseUrl, imageBaseUrl, destStrStrDynamodbTableName, destStrNumDynamodbTableName, false);
+//    }
 
     PrivateMusicCataloguer(String sourceS3BucketName,
                            String sourceS3Prefix,
                            String baseUrl,
                            String imageBaseUrl,
                            String destStrStrDynamodbTableName,
-                           String destStrNumDynamodbTableName) throws IOException, NoSuchAlgorithmException {
+                           String destStrNumDynamodbTableName,
+                           boolean live) throws IOException, NoSuchAlgorithmException {
         this.sourceS3BucketName = sourceS3BucketName;
         this.sourceS3Prefix = sourceS3Prefix;
         this.baseUrl = baseUrl;
 //        this.imageBaseUrl = imageBaseUrl;
 //        this.destStrStrDynamodbTableName = destStrStrDynamodbTableName;
 //        this.destStrNumDynamodbTableName = destStrNumDynamodbTableName;
+        this.live = live;
         this.mp3Adapter = new Mp3Adapter();
         this.jsonAdapter = new JSONAdapter();
         this.sha256Digester = MessageDigest.getInstance("SHA-256");
@@ -74,10 +86,12 @@ class PrivateMusicCataloguer {
         this.defaultArt = defaultArtObject(imageBaseUrl);
         this.en_US = Locale.en_US();
         Map<EntityType, Map<List<String>, String>> entityIdsByTypeAndNaturalKey = null;
-        this.catalogDAO = new DynamoDBCatalogDAO(
-                destStrStrDynamodbTableName,
-                destStrNumDynamodbTableName
-        );
+        if(live) {
+            this.catalogDAO = new DynamoDBCatalogDAO(
+                    destStrStrDynamodbTableName,
+                    destStrNumDynamodbTableName
+            );
+        }
 //        this.dao = new CatalogDAO(Hbm2DdlAuto.create);
 //        dao.save(en_US);
 //        dao.save(defaultArt);
@@ -252,7 +266,9 @@ class PrivateMusicCataloguer {
         MusicGroupCatalog catalog = new MusicGroupCatalog();
         catalog.setEntities(new ArrayList<>(artists.values()));
         catalog.setLocales(asArrayList(en_US));
-        artists.values().forEach(catalogDAO::save);
+        if(live) {
+            artists.values().forEach(catalogDAO::save);
+        }
 //        dao.save(catalog);
         return artists;
     }
@@ -276,7 +292,9 @@ class PrivateMusicCataloguer {
         MusicAlbumCatalog catalog = new MusicAlbumCatalog();
         catalog.setEntities(new ArrayList<>(albums.values()));
         catalog.setLocales(asArrayList(en_US));
-        albums.values().forEach(catalogDAO::save);
+        if(live) {
+            albums.values().forEach(catalogDAO::save);
+        }
 //        dao.save(catalog);
         return albums;
     }
@@ -366,14 +384,16 @@ class PrivateMusicCataloguer {
                     threadPoolExecutor.invokeAll(
                             tracks.stream().<Callable<Track>>map(
                                     track -> () -> {
-                                        try {
-                                            catalogDAO.save(track);
-                                        } catch (RuntimeException e) {
-                                            System.out.printf(
-                                                    "Failure:%n\t%s%n",
-                                                    jsonAdapter.writeValueAsString(track)
-                                            );
-                                            throw e;
+                                        if(live) {
+                                            try {
+                                                catalogDAO.save(track);
+                                            } catch (RuntimeException e) {
+                                                System.out.printf(
+                                                        "Failure:%n\t%s%n",
+                                                        jsonAdapter.writeValueAsString(track)
+                                                );
+                                                throw e;
+                                            }
                                         }
                                         return track;
                                     }
@@ -385,30 +405,32 @@ class PrivateMusicCataloguer {
                             childTracksByArtistId.entrySet().stream().<Callable<Track>>map(
                                     artistIdChildTracks -> () -> {
 //                                        try {
-                                        catalogDAO.saveChildTrackAssociations(
-                                                Artist.class,
-                                                artistIdChildTracks.getKey(),
-                                                artistIdChildTracks.getValue().stream().sorted(
-                                                        Comparator.<Track, Long>comparing(
-                                                                track -> track.getAlbums()
-                                                                        .stream()
-                                                                        .map(
-                                                                                albumReference -> Optional.ofNullable(albumReference.getNaturalOrder())
-                                                                                        .orElse(0L)
-                                                                        )
-                                                                        .findAny()
-                                                                        .orElse(0L)
-                                                        ).thenComparing(
-                                                                track -> track.getAlbums().stream().flatMap(
-                                                                        albumReference -> albumReference.getNames()
-                                                                                .stream()
-                                                                ).map(EntityName::getValue).findAny().orElse("")
-                                                        ).thenComparing(
-                                                                track -> Optional.ofNullable(track.getNaturalOrder())
-                                                                        .orElse(0L)
-                                                        )
-                                                ).collect(Collectors.toList())
-                                        );
+                                        if(live) {
+                                            catalogDAO.saveChildTrackAssociations(
+                                                    Artist.class,
+                                                    artistIdChildTracks.getKey(),
+                                                    artistIdChildTracks.getValue().stream().sorted(
+                                                            Comparator.<Track, Long>comparing(
+                                                                    track -> track.getAlbums()
+                                                                            .stream()
+                                                                            .map(
+                                                                                    albumReference -> Optional.ofNullable(albumReference.getNaturalOrder())
+                                                                                            .orElse(0L)
+                                                                            )
+                                                                            .findAny()
+                                                                            .orElse(0L)
+                                                            ).thenComparing(
+                                                                    track -> track.getAlbums().stream().flatMap(
+                                                                            albumReference -> albumReference.getNames()
+                                                                                    .stream()
+                                                                    ).map(EntityName::getValue).findAny().orElse("")
+                                                            ).thenComparing(
+                                                                    track -> Optional.ofNullable(track.getNaturalOrder())
+                                                                            .orElse(0L)
+                                                            )
+                                                    ).collect(Collectors.toList())
+                                            );
+                                        }
 //                                        } catch (RuntimeException e) {
 //                                            System.out.printf(
 //                                                    "Failure:%n\t%s%n",
@@ -425,16 +447,18 @@ class PrivateMusicCataloguer {
                     threadPoolExecutor.invokeAll(
                             childTracksByAlbumId.entrySet().stream().<Callable<Track>>map(
                                     albumIdChildTracks -> () -> {
-                                        catalogDAO.saveChildTrackAssociations(
-                                                Album.class,
-                                                albumIdChildTracks.getKey(),
-                                                albumIdChildTracks.getValue().stream().sorted(
-                                                        Comparator.comparing(
-                                                                track -> Optional.ofNullable(track.getNaturalOrder())
-                                                                        .orElse(0L)
-                                                        )
-                                                ).collect(Collectors.toList())
-                                        );
+                                        if(live) {
+                                            catalogDAO.saveChildTrackAssociations(
+                                                    Album.class,
+                                                    albumIdChildTracks.getKey(),
+                                                    albumIdChildTracks.getValue().stream().sorted(
+                                                            Comparator.comparing(
+                                                                    track -> Optional.ofNullable(track.getNaturalOrder())
+                                                                            .orElse(0L)
+                                                            )
+                                                    ).collect(Collectors.toList())
+                                            );
+                                        }
                                         return null;
                                     }
                             ).collect(Collectors.toList())
@@ -496,7 +520,11 @@ class PrivateMusicCataloguer {
 
     private TrackMetadata parseTrackMetadataS3(S3Object s3Object) {
         String filePath = removeRootS3Prefix(s3Object.key());
-        TrackMetadata trackMetadata = catalogDAO.findTrackMetadata(filePath);
+        TrackMetadata trackMetadata = (
+                live?
+                catalogDAO.findTrackMetadata(filePath):
+                        null
+        );
         if (trackMetadata != null) {
             System.out.printf(
                     "Track metadata found in DynamoDB for S3 object %s.%n",
@@ -541,14 +569,16 @@ class PrivateMusicCataloguer {
             for (Future<TrackMetadata> task : tasks) {
                 trackMetadataList.add(task.get());
             }
+            if(live) {
             List<Future<?>> persistenceTasks = new ArrayList<>();
-            for (TrackMetadata trackMetadata : trackMetadataList) {
-                persistenceTasks.add(executor.submit(
-                        () -> catalogDAO.save(trackMetadata)
-                ));
-            }
+                for (TrackMetadata trackMetadata : trackMetadataList) {
+                    persistenceTasks.add(executor.submit(
+                            () -> catalogDAO.save(trackMetadata)
+                    ));
+                }
             for (Future<?> persistenceTask : persistenceTasks) {
                 persistenceTask.get();
+            }
             }
         } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
@@ -558,15 +588,15 @@ class PrivateMusicCataloguer {
         return trackMetadataList;
     }
 
+    private boolean isAlbumArtS3(S3Object s3Object) {
+        String[] pathSegments = s3Object.key().split("/");
+        String filename = pathSegments[pathSegments.length - 1];
+        return (filename.startsWith("ALBUM~") || filename.startsWith("AlbumArt")) && filename.endsWith(JPGEXT);
+    }
+
     private List<ImageMetadata> collectAlbumArtS3(List<S3Object> s3Objects) {
         List<S3Object> jpgs = s3Objects.stream()
-                .filter(
-                        s3Object -> Arrays.stream(s3Object.key().toLowerCase().split("/"))
-                                .reduce((x, y) -> y)
-                                .map(name ->
-                                        (name.startsWith("ALBUM~") || name.startsWith("AlbumArt")) && name.endsWith(JPGEXT))
-                                .orElse(false)
-                ).collect(Collectors.toList());
+                .filter(this::isAlbumArtS3).collect(Collectors.toList());
         return jpgs.stream().map(jpg -> {
             try (InputStream s3InputStream = s3Client.getObject(GetObjectRequest.builder()
                     .bucket(sourceS3BucketName)
