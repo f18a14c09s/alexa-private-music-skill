@@ -1,7 +1,11 @@
 package f18a14c09s.integration.alexa.music.catalog;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import f18a14c09s.integration.alexa.data.Locale;
-import f18a14c09s.integration.alexa.music.catalog.data.*;
+import f18a14c09s.integration.alexa.music.catalog.data.MusicAlbumCatalog;
+import f18a14c09s.integration.alexa.music.catalog.data.MusicGroupCatalog;
+import f18a14c09s.integration.alexa.music.catalog.data.S3MediaFile;
+import f18a14c09s.integration.alexa.music.catalog.data.S3MediaFolder;
 import f18a14c09s.integration.alexa.music.data.Art;
 import f18a14c09s.integration.alexa.music.data.ArtSource;
 import f18a14c09s.integration.alexa.music.data.ArtSourceSize;
@@ -11,6 +15,7 @@ import f18a14c09s.integration.mp3.ImageMetadata;
 import f18a14c09s.integration.mp3.Mp3Adapter;
 import f18a14c09s.integration.mp3.Mp3Folder;
 import f18a14c09s.integration.mp3.TrackMetadata;
+import lombok.Getter;
 import org.jaudiotagger.audio.exceptions.InvalidAudioFrameException;
 import org.jaudiotagger.audio.exceptions.ReadOnlyFileException;
 import org.jaudiotagger.tag.TagException;
@@ -124,7 +129,7 @@ class PrivateMusicCataloguer {
                         )
                 )
         ));
-        catalogTracks(rootMp3Folder, artistReferences, albumReferences);
+        deduplicateAndCatalogTracks(rootMp3Folder, artistReferences, albumReferences);
     }
 
     private void printFolderSummary(Mp3Folder rootMp3Folder) {
@@ -208,71 +213,40 @@ class PrivateMusicCataloguer {
         return albums;
     }
 
-    private void catalogTracks(Mp3Folder rootMp3Folder,
-                               Map<String, ArtistReference> artists,
-                               Map<ArrayList<String>, AlbumReference> albums) throws IOException {
-        List<Track> tracks = new ArrayList<>();
-        Map<String, List<Track>> childTracksByArtistId = new HashMap<>();
-        Map<String, List<Track>> childTracksByAlbumId = new HashMap<>();
-        List<Mp3Folder> mp3Folders = asArrayList(rootMp3Folder);
-        Map<String, String> trackUrlsById = new HashMap<>();
-        while (!mp3Folders.isEmpty()) {
-            Mp3Folder folder = mp3Folders.remove(0);
-            mp3Folders.addAll(folder.getChildren());
-            for (TrackMetadata metadata : folder.getMp3s()) {
-                Set<String> trackArtistNames = Optional.of(metadata.getDistinctArtistNames())
-                        .map(Map::keySet)
-                        .filter(Predicate.not(Set::isEmpty))
-                        .orElse(Set.of("Unknown"));
-                List<ArtistReference> trackArtists = trackArtistNames.stream()
-                        .map(artists::get)
-                        .collect(Collectors.toList());
-                System.out.println(jsonAdapter.writeValueAsString(metadata));
-                AlbumReference trackAlbum = trackArtistNames.stream().filter(Objects::nonNull).map(
-                        trackArtistName -> asArrayList(
-                                trackArtistName,
-                                metadata.getAlbum()
-                        )
-                ).map(albums::get).filter(Objects::nonNull).findAny().get();
-                Track trackEntity = entityFactory.newTrackEntity(metadata,
-                        buildUrl(metadata.getFilePath()),
-                        trackArtists,
-                        trackAlbum,
-                        Optional.ofNullable(folder.getArt()).orElse(defaultArt));
-                if (trackUrlsById.containsKey(trackEntity.getId())) {
-                    System.out.printf(
-                            "Track appears to be a duplicate:%n\tEntity ID: %s%n\tTrack URL: %s%n\tPotential Duplicate URL: %s%n",
-                            trackEntity.getId(),
-                            trackUrlsById.get(trackEntity.getId()),
-                            trackEntity.getUrl()
-                    );
-                } else {
-                    tracks.add(trackEntity);
-                    trackUrlsById.put(trackEntity.getId(), trackEntity.getUrl());
-                    for (ArtistReference artistReference : trackEntity.getArtists()) {
-                        System.out.println(
-                                jsonAdapter.writeValueAsString(artistReference)
-                        );
-                        childTracksByArtistId.computeIfAbsent(
-                                artistReference.getId(),
-                                artistId -> new ArrayList<>()
-                        ).add(trackEntity);
-                    }
-                    for (AlbumReference albumReference : trackEntity.getAlbums()) {
-                        childTracksByAlbumId.computeIfAbsent(
-                                albumReference.getId(),
-                                artistId -> new ArrayList<>()
-                        ).add(trackEntity);
-                    }
-                }
-            }
-        }
-        MusicRecordingCatalog trackCatalog = new MusicRecordingCatalog();
-        trackCatalog.setEntities(tracks);
-        trackCatalog.setLocales(asArrayList(en_US));
-        ExecutorService threadPoolExecutor = Executors.newFixedThreadPool(20);
-        List<Future<Track>> tasks = new ArrayList<>();
-        try {
+    private Track newTrackEntity(
+            TrackMetadata metadata,
+            Mp3Folder folder,
+            Map<String, ArtistReference> artists,
+            Map<ArrayList<String>, AlbumReference> albums
+    ) throws JsonProcessingException {
+        Set<String> trackArtistNames = Optional.of(metadata.getDistinctArtistNames())
+                .map(Map::keySet)
+                .filter(Predicate.not(Set::isEmpty))
+                .orElse(Set.of("Unknown"));
+        List<ArtistReference> trackArtists = trackArtistNames.stream()
+                .map(artists::get)
+                .collect(Collectors.toList());
+        System.out.println(jsonAdapter.writeValueAsString(metadata));
+        AlbumReference trackAlbum = trackArtistNames.stream().filter(Objects::nonNull).map(
+                trackArtistName -> asArrayList(
+                        trackArtistName,
+                        metadata.getAlbum()
+                )
+        ).map(albums::get).filter(Objects::nonNull).findAny().get();
+        return entityFactory.newTrackEntity(metadata,
+                buildUrl(metadata.getFilePath()),
+                trackArtists,
+                trackAlbum,
+                Optional.ofNullable(folder.getArt()).orElse(defaultArt));
+    }
+
+    public class CatalogPersistence {
+        @Getter
+        private List<Future<Track>> tasks = new ArrayList<>();
+        @Getter
+        private ExecutorService threadPoolExecutor = Executors.newFixedThreadPool(20);
+
+        public void saveTracks(List<Track> tracks) throws InterruptedException {
             tasks.addAll(
                     threadPoolExecutor.invokeAll(
                             tracks.stream().<Callable<Track>>map(
@@ -293,6 +267,9 @@ class PrivateMusicCataloguer {
                             ).collect(Collectors.toList())
                     )
             );
+        }
+
+        public void associateTracksToArtists(Map<String, List<Track>> childTracksByArtistId) throws InterruptedException {
             tasks.addAll(
                     threadPoolExecutor.invokeAll(
                             childTracksByArtistId.entrySet().stream().<Callable<Track>>map(
@@ -328,6 +305,9 @@ class PrivateMusicCataloguer {
                             ).collect(Collectors.toList())
                     )
             );
+        }
+
+        public void associateTracksToAlbums(Map<String, List<Track>> childTracksByAlbumId) throws InterruptedException {
             tasks.addAll(
                     threadPoolExecutor.invokeAll(
                             childTracksByAlbumId.entrySet().stream().<Callable<Track>>map(
@@ -349,12 +329,68 @@ class PrivateMusicCataloguer {
                             ).collect(Collectors.toList())
                     )
             );
+        }
+    }
+
+    private void deduplicateAndCatalogTracks(Mp3Folder rootMp3Folder,
+                                             Map<String, ArtistReference> artists,
+                                             Map<ArrayList<String>, AlbumReference> albums) throws IOException {
+        List<Track> tracks = new ArrayList<>();
+        Map<String, List<Track>> childTracksByArtistId = new HashMap<>();
+        Map<String, List<Track>> childTracksByAlbumId = new HashMap<>();
+        List<Mp3Folder> mp3Folders = asArrayList(rootMp3Folder);
+        Map<String, String> trackUrlsById = new HashMap<>();
+
+        while (!mp3Folders.isEmpty()) {
+            Mp3Folder folder = mp3Folders.remove(0);
+            mp3Folders.addAll(folder.getChildren());
+            for (TrackMetadata metadata : folder.getMp3s()) {
+                Track trackEntity = newTrackEntity(
+                        metadata, folder, artists, albums
+                );
+                if (trackUrlsById.containsKey(trackEntity.getId())) {
+                    System.out.printf(
+                            "Track appears to be a duplicate:%n\tEntity ID: %s%n\tTrack URL: %s%n\tPotential Duplicate URL: %s%n",
+                            trackEntity.getId(),
+                            trackUrlsById.get(trackEntity.getId()),
+                            trackEntity.getUrl()
+                    );
+                } else {
+                    tracks.add(trackEntity);
+                    trackUrlsById.put(trackEntity.getId(), trackEntity.getUrl());
+                    for (ArtistReference artistReference : trackEntity.getArtists()) {
+                        System.out.println(
+                                jsonAdapter.writeValueAsString(artistReference)
+                        );
+                        childTracksByArtistId.computeIfAbsent(
+                                artistReference.getId(),
+                                artistId -> new ArrayList<>()
+                        ).add(trackEntity);
+                    }
+                    for (AlbumReference albumReference : trackEntity.getAlbums()) {
+                        childTracksByAlbumId.computeIfAbsent(
+                                albumReference.getId(),
+                                artistId -> new ArrayList<>()
+                        ).add(trackEntity);
+                    }
+                }
+            }
+        }
+        saveTracksToCatalog(tracks, childTracksByArtistId, childTracksByAlbumId);
+    }
+
+    private void saveTracksToCatalog(List<Track> tracks, Map<String, List<Track>> childTracksByArtistId, Map<String, List<Track>> childTracksByAlbumId) throws IOException {
+        CatalogPersistence persistence = new CatalogPersistence();
+        try {
+            persistence.saveTracks(tracks);
+            persistence.associateTracksToArtists(childTracksByArtistId);
+            persistence.associateTracksToAlbums(childTracksByAlbumId);
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         } finally {
-            threadPoolExecutor.shutdown();
+            persistence.getThreadPoolExecutor().shutdown();
         }
-        for (Future<Track> task : tasks) {
+        for (Future<Track> task : persistence.getTasks()) {
             try {
                 Track success = task.get();
                 System.out.printf(
