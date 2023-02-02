@@ -1,9 +1,7 @@
 package f18a14c09s.integration.alexa.music.catalog;
 
 import f18a14c09s.integration.alexa.data.Locale;
-import f18a14c09s.integration.alexa.music.catalog.data.MusicAlbumCatalog;
-import f18a14c09s.integration.alexa.music.catalog.data.MusicGroupCatalog;
-import f18a14c09s.integration.alexa.music.catalog.data.MusicRecordingCatalog;
+import f18a14c09s.integration.alexa.music.catalog.data.*;
 import f18a14c09s.integration.alexa.music.data.Art;
 import f18a14c09s.integration.alexa.music.data.ArtSource;
 import f18a14c09s.integration.alexa.music.data.ArtSourceSize;
@@ -17,7 +15,7 @@ import org.jaudiotagger.audio.exceptions.InvalidAudioFrameException;
 import org.jaudiotagger.audio.exceptions.ReadOnlyFileException;
 import org.jaudiotagger.tag.TagException;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.*;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -27,18 +25,13 @@ import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.Predicate;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static f18a14c09s.util.CollectionUtil.asArrayList;
 
 class PrivateMusicCataloguer {
-    public static final String MP3EXT = ".mp3";
-    public static final String JPGEXT = ".jpg";
-
     private String sourceS3BucketName;
-    private String sourceS3Prefix;
     private String baseUrl;
     private DynamoDBCatalogDAO catalogDAO;
     private EntityFactory entityFactory;
@@ -47,6 +40,7 @@ class PrivateMusicCataloguer {
     private MessageDigest sha256Digester;
     private Base64.Encoder base64Encoder;
     private S3Client s3Client = S3Client.create();
+    private S3MusicDAO s3MusicDao;
     private Locale en_US;
     private Art defaultArt;
     private final boolean live;
@@ -59,13 +53,13 @@ class PrivateMusicCataloguer {
                            String destStrNumDynamodbTableName,
                            boolean live) throws IOException, NoSuchAlgorithmException {
         this.sourceS3BucketName = sourceS3BucketName;
-        this.sourceS3Prefix = sourceS3Prefix;
         this.baseUrl = baseUrl;
         this.live = live;
         this.mp3Adapter = new Mp3Adapter();
         this.jsonAdapter = new JSONAdapter();
         this.sha256Digester = MessageDigest.getInstance("SHA-256");
         this.base64Encoder = Base64.getEncoder();
+        this.s3MusicDao = new S3MusicDAO(sourceS3BucketName, sourceS3Prefix);
         //
         this.defaultArt = defaultArtObject(imageBaseUrl);
         this.en_US = Locale.en_US();
@@ -101,7 +95,8 @@ class PrivateMusicCataloguer {
     }
 
     void catalogMusic() throws IOException {
-        Mp3Folder rootMp3Folder = collectTrackInfoRecursivelyS3(sourceS3Prefix, 0);
+        S3MediaFolder rootFolderReference = s3MusicDao.recurseMediaFolder();
+        Mp3Folder rootMp3Folder = catalogMusicFolder(rootFolderReference, 0);
         printFolderSummary(rootMp3Folder);
         Map<String, Artist> artists = catalogArtists(rootMp3Folder);
         Map<String, String> artistIdToName = artists.entrySet()
@@ -372,88 +367,64 @@ class PrivateMusicCataloguer {
         }
     }
 
-    private Mp3Folder collectTrackInfoRecursivelyS3(String s3Prefix, int level) {
+    private Mp3Folder catalogMusicFolder(S3MediaFolder folderReference, int level) {
         List<Mp3Folder> children = new ArrayList<>();
-        List<CommonPrefix> commonPrefixes = new ArrayList<>();
-        List<S3Object> s3Objects = new ArrayList<>();
-        for (ListObjectsV2Response response : s3Client.listObjectsV2Paginator(
-                ListObjectsV2Request.builder().bucket(
-                        sourceS3BucketName
-                ).delimiter(
-                        "/" // DO NOT forget this!
-                ).prefix(
-                        s3Prefix
-                ).build()
-        )) {
-            commonPrefixes.addAll(response.commonPrefixes());
-            s3Objects.addAll(response.contents());
-        }
-        List<TrackMetadata> mp3s = collectTrackMetadataS3(s3Objects);
-        if (!mp3s.isEmpty()) {
-            commonPrefixes.clear();
-        }
-        for (CommonPrefix subdir : commonPrefixes) {
-            Mp3Folder child = collectTrackInfoRecursivelyS3(subdir.prefix(), level + 1);
+        List<TrackMetadata> mp3s = catalogMusicTracks(folderReference.getMusicFiles());
+        for (S3MediaFolder subfolderReference : folderReference.getSubfolders()) {
+            Mp3Folder child = catalogMusicFolder(subfolderReference, level + 1);
             children.add(child);
             System.out.printf(
                     "Found %s MP3s under S3 prefix %s.%n",
                     child.recurseMp3s().count(),
-                    subdir.prefix()
+                    subfolderReference.getS3Key()
             );
         }
-        return new Mp3Folder(mp3s, collectAlbumArtS3(s3Objects), level, children);
+        return new Mp3Folder(mp3s, catalogAlbumArt(folderReference.getArtFiles()), level, children);
     }
 
-    private String removeRootS3Prefix(String s3PrefixOrKey) {
-        return s3PrefixOrKey.replaceAll("^" + Pattern.quote(sourceS3Prefix), "");
-    }
-
-    private TrackMetadata parseTrackMetadataS3(S3Object s3Object) {
-        String filePath = removeRootS3Prefix(s3Object.key());
+    private TrackMetadata parseTrackMetadata(S3MediaFile musicFile) {
         TrackMetadata trackMetadata = (
                 live ?
-                        catalogDAO.findTrackMetadata(filePath) :
+                        catalogDAO.findTrackMetadata(musicFile.getPath()) :
                         null
         );
         if (trackMetadata != null) {
             System.out.printf(
                     "Track metadata found in DynamoDB for S3 object %s.%n",
-                    s3Object.key()
+                    musicFile.getS3Key()
             );
             return trackMetadata;
         }
         System.out.printf(
                 "Retrieving S3 object %s.%n",
-                s3Object.key()
+                musicFile.getS3Key()
         );
         try (InputStream s3InputStream = s3Client.getObject(
                 GetObjectRequest.builder().bucket(
                         sourceS3BucketName
                 ).key(
-                        s3Object.key()
+                        musicFile.getS3Key()
                 ).build()
         )) {
             TrackMetadata track = mp3Adapter.parseMetadata(
                     s3InputStream
             );
-            track.setFilePath(filePath);
+            track.setFilePath(musicFile.getPath());
             track.setAlbum(Optional.ofNullable(track.getAlbum()).orElse("Unknown"));
             track.setTitle(Optional.ofNullable(track.getTitle()).orElse("Unknown"));
             return track;
         } catch (IOException | InvalidAudioFrameException | TagException | ReadOnlyFileException e) {
-            throw new RuntimeException(String.format("Failure retrieving or parsing %s.", s3Object.key()), e);
+            throw new RuntimeException(String.format("Failure retrieving or parsing %s.", musicFile.getS3Key()), e);
         }
     }
 
-    private List<TrackMetadata> collectTrackMetadataS3(List<S3Object> s3Objects) {
+    private List<TrackMetadata> catalogMusicTracks(List<S3MediaFile> musicFiles) {
         List<TrackMetadata> trackMetadataList = new ArrayList<>();
-        List<S3Object> mp3s = s3Objects.stream()
-                .filter(s3Object -> s3Object.key().toLowerCase().endsWith(MP3EXT))
-                .collect(Collectors.toList());
         ExecutorService executor = Executors.newFixedThreadPool(10);
         try {
-            List<Future<TrackMetadata>> tasks = executor.invokeAll(mp3s.stream()
-                    .<Callable<TrackMetadata>>map(s3Object -> (() -> parseTrackMetadataS3(s3Object)))
+
+            List<Future<TrackMetadata>> tasks = executor.invokeAll(musicFiles.stream()
+                    .<Callable<TrackMetadata>>map(s3Object -> (() -> parseTrackMetadata(s3Object)))
                     .collect(Collectors.toList()));
             for (Future<TrackMetadata> task : tasks) {
                 trackMetadataList.add(task.get());
@@ -477,23 +448,15 @@ class PrivateMusicCataloguer {
         return trackMetadataList;
     }
 
-    private boolean isAlbumArtS3(S3Object s3Object) {
-        String[] pathSegments = s3Object.key().split("/");
-        String filename = pathSegments[pathSegments.length - 1];
-        return (filename.startsWith("ALBUM~") || filename.startsWith("AlbumArt")) && filename.endsWith(JPGEXT);
-    }
-
-    private List<ImageMetadata> collectAlbumArtS3(List<S3Object> s3Objects) {
-        List<S3Object> jpgs = s3Objects.stream()
-                .filter(this::isAlbumArtS3).collect(Collectors.toList());
-        return jpgs.stream().map(jpg -> {
+    private List<ImageMetadata> catalogAlbumArt(List<S3MediaFile> albumArtFiles) {
+        return albumArtFiles.stream().map(jpg -> {
             try (InputStream s3InputStream = s3Client.getObject(GetObjectRequest.builder()
                     .bucket(sourceS3BucketName)
-                    .key(jpg.key())
+                    .key(jpg.getS3Key())
                     .build())) {
-                return newImageMetadata(s3InputStream, buildUrl(removeRootS3Prefix(jpg.key())));
+                return newImageMetadata(s3InputStream, buildUrl(jpg.getPath()));
             } catch (IOException e) {
-                throw new RuntimeException("Failed to access image " + jpg.key() + ".", e);
+                throw new RuntimeException("Failed to access image " + jpg.getS3Key() + ".", e);
             }
         }).distinct().collect(Collectors.toList());
     }
