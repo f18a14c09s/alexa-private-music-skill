@@ -2,10 +2,10 @@ package f18a14c09s.integration.alexa.music.catalog;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import f18a14c09s.integration.alexa.data.Locale;
-import f18a14c09s.integration.alexa.music.catalog.data.MusicAlbumCatalog;
-import f18a14c09s.integration.alexa.music.catalog.data.MusicGroupCatalog;
 import f18a14c09s.integration.alexa.music.catalog.data.S3MediaFile;
 import f18a14c09s.integration.alexa.music.catalog.data.S3MediaFolder;
+import f18a14c09s.integration.alexa.music.catalog.reconciliation.PreexistingCatalog;
+import f18a14c09s.integration.alexa.music.catalog.reporting.CataloguerReportFactory;
 import f18a14c09s.integration.alexa.music.data.Art;
 import f18a14c09s.integration.alexa.music.data.ArtSource;
 import f18a14c09s.integration.alexa.music.data.ArtSourceSize;
@@ -16,8 +16,6 @@ import f18a14c09s.integration.mp3.Mp3Adapter;
 import f18a14c09s.integration.mp3.Mp3Folder;
 import f18a14c09s.integration.mp3.TrackMetadata;
 import f18a14c09s.util.CsvFileWriter;
-import lombok.Getter;
-import lombok.Setter;
 import org.jaudiotagger.audio.exceptions.InvalidAudioFrameException;
 import org.jaudiotagger.audio.exceptions.ReadOnlyFileException;
 import org.jaudiotagger.tag.TagException;
@@ -33,12 +31,12 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static f18a14c09s.integration.alexa.music.catalog.CataloguerReportFactory.toReportRow;
+import static f18a14c09s.integration.alexa.music.catalog.reconciliation.PreexistingCatalogFactory.loadPreexistingCatalog;
+import static f18a14c09s.integration.alexa.music.catalog.reporting.CataloguerReportFactory.toReportRow;
 import static f18a14c09s.util.CollectionUtil.asArrayList;
 
 class PrivateMusicCataloguer {
@@ -54,89 +52,11 @@ class PrivateMusicCataloguer {
     private Base64.Encoder base64Encoder;
     private S3Client s3Client = S3Client.create();
     private S3MusicDAO s3MusicDao;
+    private BulkTrackPersistence bulkTrackPersistence;
     private CsvFileWriter reportWriter;
     private Locale en_US;
     private Art defaultArt;
     private PreexistingCatalog preexistingCatalog = new PreexistingCatalog();
-
-    @Getter
-    @Setter
-    private static class PreexistingCatalog {
-        private Map<String, Artist> artistsById;
-        private Map<String, Album> albumsById;
-        private Map<String, Track> tracksById;
-        private Map<String, List<Artist>> artistsByName;
-        private Map<List<String>, List<Album>> albumsByArtistAndName;
-        private Map<List<String>, List<Track>> tracksByArtistAlbumAndName;
-
-        public Artist findArtistById(String artistId) {
-            return artistsById.get(artistId);
-        }
-
-        public Album findAlbumById(String albumId) {
-            return albumsById.get(albumId);
-        }
-
-        public Track findTrackById(String trackId) {
-            return tracksById.get(trackId);
-        }
-
-        public Collection<Artist> matchArtistsByName(Artist artist) {
-            return Optional.ofNullable(artist.getNames())
-                    .orElse(List.of())
-                    .stream()
-                    .flatMap(name -> artistsByName.get(name.getValue()).stream())
-                    .collect(Collectors.toMap(BaseEntity::getId, Function.identity(), (lhs, rhs) -> lhs))
-                    .values();
-        }
-
-        public Collection<Album> matchAlbumsByArtistAndName(Album album) {
-            List<List<String>>
-                    artistsAndNames =
-                    album.getNames()
-                            .stream()
-                            .map(EntityName::getValue)
-                            .flatMap(albumName -> album.getArtists()
-                                    .stream()
-                                    .flatMap(artistReference -> artistReference.getNames().stream())
-                                    .map(EntityName::getValue)
-                                    .map(artistName -> List.of(artistName, albumName)))
-                            .collect(Collectors.toList());
-            return artistsAndNames
-                    .stream()
-                    .flatMap(artistNameAlbumName -> albumsByArtistAndName.computeIfAbsent(artistNameAlbumName,
-                                    key -> List.of())
-                            .stream())
-                    .collect(Collectors.toMap(BaseEntity::getId, Function.identity(), (lhs, rhs) -> lhs))
-                    .values();
-        }
-
-        public Collection<Track> matchTracksByArtistAlbumAndName(Track track) {
-            List<List<String>>
-                    artistsAlbumsAndNames =
-                    track.getNames()
-                            .stream()
-                            .map(EntityName::getValue)
-                            .flatMap(trackName -> track.getArtists()
-                                    .stream()
-                                    .flatMap(artistReference -> artistReference.getNames().stream())
-                                    .map(EntityName::getValue)
-                                    .flatMap(artistName -> track.getAlbums()
-                                            .stream()
-                                            .flatMap(albumReference -> albumReference.getNames()
-                                                    .stream()
-                                                    .map(EntityName::getValue)
-                                                    .map(albumName -> List.of(artistName, albumName, trackName)))))
-                            .collect(Collectors.toList());
-            return artistsAlbumsAndNames
-                    .stream()
-                    .flatMap(artistNameAlbumName -> tracksByArtistAlbumAndName.computeIfAbsent(artistNameAlbumName,
-                                    key -> List.of())
-                            .stream())
-                    .collect(Collectors.toMap(BaseEntity::getId, Function.identity(), (lhs, rhs) -> lhs))
-                    .values();
-        }
-    }
 
     public interface ExceptionalSupplier<T> {
         T get() throws Exception;
@@ -176,115 +96,9 @@ class PrivateMusicCataloguer {
                 destStrNumDynamodbTableName
         );
         //
-        loadPreexistingCatalog();
-        //
-        Map<EntityType, Map<List<String>, String>> entityIdsByTypeAndNaturalKey = new HashMap<>();
-        for (Map.Entry<String, List<Artist>> artistNameArtists : preexistingCatalog.getArtistsByName().entrySet()) {
-            if (artistNameArtists.getValue().size() > 1) {
-                System.out.printf("More than one artist (%s total) with name \"%s\" found.%n",
-                        artistNameArtists.getValue()
-                                .size(), artistNameArtists.getKey());
-                entityIdsByTypeAndNaturalKey.computeIfAbsent(EntityType.ARTIST, key -> new HashMap<>()).put(
-                        List.of(artistNameArtists.getKey()), artistNameArtists.getValue().get(0).getId()
-                );
-            }
-        }
-        for (Map.Entry<List<String>, List<Album>> albumArtistNameAlbums : preexistingCatalog.getAlbumsByArtistAndName()
-                .entrySet()) {
-            if (albumArtistNameAlbums.getValue().size() > 1) {
-                System.out.printf("More than one album (%s total) with (artist, name) \"%s\" found.%n",
-                        albumArtistNameAlbums.getValue()
-                                .size(), albumArtistNameAlbums.getKey());
-                entityIdsByTypeAndNaturalKey.computeIfAbsent(EntityType.ALBUM, key -> new HashMap<>()).put(
-                        albumArtistNameAlbums.getKey(), albumArtistNameAlbums.getValue().get(0).getId()
-                );
-            }
-        }
-        for (Map.Entry<List<String>, List<Track>> trackArtistAlbumNameTracks :
-                preexistingCatalog.getTracksByArtistAlbumAndName()
-                .entrySet()) {
-            if (trackArtistAlbumNameTracks.getValue().size() > 1) {
-                System.out.printf("More than one track (%s total) with (artist, album, name) \"%s\" found.%n",
-                        trackArtistAlbumNameTracks.getValue()
-                                .size(), trackArtistAlbumNameTracks.getKey());
-                entityIdsByTypeAndNaturalKey.computeIfAbsent(EntityType.TRACK, key -> new HashMap<>()).put(
-                        trackArtistAlbumNameTracks.getKey(), trackArtistAlbumNameTracks.getValue().get(0).getId()
-                );
-            }
-        }
-        this.entityFactory = new EntityFactory(en_US, entityIdsByTypeAndNaturalKey);
-    }
-
-    private void loadPreexistingCatalog() {
-        List<Artist>
-                artists =
-                catalogDAO.listArtists()
-                        .stream()
-                        .filter(artist -> artist.getDeleted() == null || !artist.getDeleted())
-                        .collect(Collectors.toList());
-        List<Album>
-                albums =
-                catalogDAO.listAlbums()
-                        .stream()
-                        .filter(album -> album.getDeleted() == null || !album.getDeleted())
-                        .collect(Collectors.toList());
-        List<Track>
-                tracks =
-                catalogDAO.listTracks()
-                        .stream()
-                        .filter(track -> track.getDeleted() == null || !track.getDeleted())
-                        .collect(Collectors.toList());
-        //
-        preexistingCatalog.setArtistsById(artists.stream()
-                .collect(Collectors.toMap(BaseEntity::getId, Function.identity())));
-        preexistingCatalog.setArtistsByName(new HashMap<>());
-        for (Artist artist : artists) {
-            for (EntityName name : Optional.ofNullable(artist.getNames()).orElse(List.of())) {
-                preexistingCatalog.getArtistsByName().computeIfAbsent(
-                        name.getValue(), key -> new ArrayList<>()
-                ).add(artist);
-            }
-        }
-        //
-        preexistingCatalog.setAlbumsById(albums.stream()
-                .collect(Collectors.toMap(BaseEntity::getId, Function.identity())));
-        preexistingCatalog.setAlbumsByArtistAndName(new HashMap<>());
-        for (Album album : albums) {
-            for (EntityName albumName : Optional.ofNullable(album.getNames()).orElse(List.of())) {
-                for (ArtistReference artistReference : Optional.ofNullable(album.getArtists()).orElse(List.of())) {
-                    for (EntityName artistName : Optional.ofNullable(artistReference.getNames()).orElse(List.of())) {
-                        List<String> artistAndName = List.of(artistName.getValue(), albumName.getValue());
-                        preexistingCatalog.getAlbumsByArtistAndName().computeIfAbsent(
-                                artistAndName, key -> new ArrayList<>()
-                        ).add(album);
-                    }
-                }
-            }
-        }
-        //
-        preexistingCatalog.setTracksById(tracks.stream()
-                .collect(Collectors.toMap(BaseEntity::getId, Function.identity())));
-        preexistingCatalog.setTracksByArtistAlbumAndName(new HashMap<>());
-        for (Track track : tracks) {
-            for (EntityName trackName : Optional.ofNullable(track.getNames()).orElse(List.of())) {
-                for (AlbumReference albumReference : track.getAlbums()) {
-                    for (EntityName albumName : Optional.ofNullable(albumReference.getNames()).orElse(List.of())) {
-                        for (ArtistReference artistReference : Optional.ofNullable(track.getArtists())
-                                .orElse(List.of())) {
-                            for (EntityName artistName : Optional.ofNullable(artistReference.getNames())
-                                    .orElse(List.of())) {
-                                List<String>
-                                        artistAlbumAndName =
-                                        List.of(artistName.getValue(), albumName.getValue(), trackName.getValue());
-                                preexistingCatalog.getTracksByArtistAlbumAndName().computeIfAbsent(
-                                        artistAlbumAndName, key -> new ArrayList<>()
-                                ).add(track);
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        loadPreexistingCatalog(catalogDAO);
+        this.entityFactory = new EntityFactory(en_US);
+        this.bulkTrackPersistence = new BulkTrackPersistence(catalogDAO);
     }
 
     private CsvFileWriter newReportWriter() throws IOException {
@@ -387,51 +201,70 @@ class PrivateMusicCataloguer {
         while (!folders.isEmpty()) {
             Mp3Folder folder = folders.remove(0);
             folders.addAll(folder.getChildren());
-            folder.getUniqueArtistNames().forEach(artistName -> {
+            for (String artistName : folder.getUniqueArtistNames()) {
                 if (!artists.containsKey(artistName)) {
-                    artists.put(artistName, entityFactory.newArtistEntity(artistName,
-                            Optional.ofNullable(folder.getArt()).orElse(defaultArt)));
+                    Collection<Artist> existingMatches = preexistingCatalog.matchArtistsByName(artistName);
+                    Art art = Optional.ofNullable(folder.getArt()).orElse(defaultArt);
+                    Artist artist;
+                    if (existingMatches == null || existingMatches.isEmpty()) {
+                        artist = entityFactory.newArtistEntity(artistName, art);
+                        if (live) {
+                            catalogDAO.save(artist);
+                        }
+                    } else {
+                        if (live) {
+                            for (Artist existingArtist : existingMatches) {
+                                existingArtist.setArt(art);
+                                existingArtist.setLastUpdatedTime(ZonedDateTime.now());
+                                catalogDAO.save(existingArtist);
+                            }
+                        }
+                        artist = existingMatches.iterator().next();
+                    }
+                    artists.put(artistName, artist);
+                    writeReportRow(toReportRow(artist, preexistingCatalog.findArtistById(artist.getId()),
+                            existingMatches));
                 }
-            });
-        }
-        MusicGroupCatalog catalog = new MusicGroupCatalog();
-        catalog.setEntities(new ArrayList<>(artists.values()));
-        catalog.setLocales(asArrayList(en_US));
-        for (Artist artist : artists.values()) {
-            if (live) {
-                catalogDAO.save(artist);
             }
-            writeReportRow(toReportRow(artist, preexistingCatalog.findArtistById(artist.getId()),
-                    preexistingCatalog.matchArtistsByName(artist)));
         }
         return artists;
     }
 
     private Map<ArrayList<String>, Album> catalogAlbums(Mp3Folder rootMp3Folder,
-                                                        Map<String, ArtistReference> artists) throws IOException {
+                                                        Map<String, ArtistReference> artists) {
         Map<ArrayList<String>, Album> albums = new HashMap<>();
         List<Mp3Folder> folders = asArrayList(rootMp3Folder);
         while (!folders.isEmpty()) {
             Mp3Folder folder = folders.remove(0);
             folders.addAll(folder.getChildren());
-            folder.getUniqueAlbumNames().forEach(albumKey -> {
+            for (AlbumKey albumKey : folder.getUniqueAlbumNames()) {
                 ArrayList<String> keyAsList = new ArrayList<>(albumKey.toList());
                 if (!albums.containsKey(keyAsList)) {
-                    albums.put(keyAsList, entityFactory.newAlbumEntity(albumKey.getAlbumName(),
-                            artists.get(albumKey.getArtistName()),
-                            Optional.ofNullable(folder.getArt()).orElse(defaultArt)));
+                    Collection<Album> existingMatches = preexistingCatalog.matchAlbumsByNaturalKey(albumKey);
+                    Art art = Optional.ofNullable(folder.getArt()).orElse(defaultArt);
+                    Album album;
+                    if (existingMatches == null || existingMatches.isEmpty()) {
+                        album = entityFactory.newAlbumEntity(albumKey.getAlbumName(),
+                                artists.get(albumKey.getArtistName()),
+                                art);
+                        if (live) {
+                            catalogDAO.save(album);
+                        }
+                    } else {
+                        if (live) {
+                            for (Album existingAlbum : existingMatches) {
+                                existingAlbum.setArt(art);
+                                existingAlbum.setLastUpdatedTime(ZonedDateTime.now());
+                                catalogDAO.save(existingAlbum);
+                            }
+                        }
+                        album = existingMatches.iterator().next();
+                    }
+                    albums.put(keyAsList, album);
+                    writeReportRow(toReportRow(album, preexistingCatalog.findAlbumById(album.getId()),
+                            existingMatches));
                 }
-            });
-        }
-        MusicAlbumCatalog catalog = new MusicAlbumCatalog();
-        catalog.setEntities(new ArrayList<>(albums.values()));
-        catalog.setLocales(asArrayList(en_US));
-        for (Album album : albums.values()) {
-            if (live) {
-                catalogDAO.save(album);
             }
-            writeReportRow(toReportRow(album, preexistingCatalog.findAlbumById(album.getId()),
-                    preexistingCatalog.matchAlbumsByArtistAndName(album)));
         }
         return albums;
     }
@@ -463,101 +296,6 @@ class PrivateMusicCataloguer {
                 Optional.ofNullable(folder.getArt()).orElse(defaultArt));
     }
 
-    public class CatalogPersistence {
-        @Getter
-        private List<Future<Track>> tasks = new ArrayList<>();
-        @Getter
-        private ExecutorService threadPoolExecutor = Executors.newFixedThreadPool(20);
-
-        public void saveTracks(List<Track> tracks) throws InterruptedException {
-            tasks.addAll(
-                    threadPoolExecutor.invokeAll(
-                            tracks.stream().<Callable<Track>>map(
-                                    track -> () -> {
-                                        if (live) {
-                                            try {
-                                                catalogDAO.save(track);
-                                            } catch (RuntimeException e) {
-                                                System.out.printf(
-                                                        "Failure:%n\t%s%n",
-                                                        jsonAdapter.writeValueAsString(track)
-                                                );
-                                                throw e;
-                                            }
-                                        }
-                                        writeReportRow(toReportRow(track,
-                                                preexistingCatalog.findTrackById(track.getId()),
-                                                preexistingCatalog.matchTracksByArtistAlbumAndName(track)));
-                                        return track;
-                                    }
-                            ).collect(Collectors.toList())
-                    )
-            );
-        }
-
-        public void associateTracksToArtists(Map<String, List<Track>> childTracksByArtistId) throws InterruptedException {
-            tasks.addAll(
-                    threadPoolExecutor.invokeAll(
-                            childTracksByArtistId.entrySet().stream().<Callable<Track>>map(
-                                    artistIdChildTracks -> () -> {
-                                        if (live) {
-                                            catalogDAO.saveChildTrackAssociations(
-                                                    Artist.class,
-                                                    artistIdChildTracks.getKey(),
-                                                    artistIdChildTracks.getValue().stream().sorted(
-                                                            Comparator.<Track, Long>comparing(
-                                                                    track -> track.getAlbums()
-                                                                            .stream()
-                                                                            .map(
-                                                                                    albumReference -> Optional.ofNullable(albumReference.getNaturalOrder())
-                                                                                            .orElse(0L)
-                                                                            )
-                                                                            .findAny()
-                                                                            .orElse(0L)
-                                                            ).thenComparing(
-                                                                    track -> track.getAlbums().stream().flatMap(
-                                                                            albumReference -> albumReference.getNames()
-                                                                                    .stream()
-                                                                    ).map(EntityName::getValue).findAny().orElse("")
-                                                            ).thenComparing(
-                                                                    track -> Optional.ofNullable(track.getNaturalOrder())
-                                                                            .orElse(0L)
-                                                            )
-                                                    ).collect(Collectors.toList())
-                                            );
-                                        }
-                                        return null;
-                                    }
-                            ).collect(Collectors.toList())
-                    )
-            );
-        }
-
-        public void associateTracksToAlbums(Map<String, List<Track>> childTracksByAlbumId) throws InterruptedException {
-            tasks.addAll(
-                    threadPoolExecutor.invokeAll(
-                            childTracksByAlbumId.entrySet().stream().<Callable<Track>>map(
-                                    albumIdChildTracks -> () -> {
-                                        if (live) {
-                                            catalogDAO.saveChildTrackAssociations(
-                                                    Album.class,
-                                                    albumIdChildTracks.getKey(),
-                                                    albumIdChildTracks.getValue().stream().sorted(
-                                                            Comparator.comparing(
-                                                                    track -> Optional.ofNullable(track.getNaturalOrder())
-                                                                            .orElse(0L)
-                                                            )
-                                                    ).collect(Collectors.toList())
-                                            );
-                                        }
-                                        return null;
-                                    }
-                            ).collect(Collectors.toList())
-                    )
-            );
-        }
-    }
-
     private void deduplicateAndCatalogTracks(Mp3Folder rootMp3Folder,
                                              Map<String, ArtistReference> artists,
                                              Map<ArrayList<String>, AlbumReference> albums) throws IOException {
@@ -586,9 +324,9 @@ class PrivateMusicCataloguer {
                     tracks.add(trackEntity);
                     trackUrlsById.put(trackEntity.getId(), trackEntity.getUrl());
                     for (ArtistReference artistReference : trackEntity.getArtists()) {
-                        System.out.println(
-                                jsonAdapter.writeValueAsString(artistReference)
-                        );
+//                        System.out.println(
+//                                jsonAdapter.writeValueAsString(artistReference)
+//                        );
                         childTracksByArtistId.computeIfAbsent(
                                 artistReference.getId(),
                                 artistId -> new ArrayList<>()
@@ -601,35 +339,13 @@ class PrivateMusicCataloguer {
                         ).add(trackEntity);
                     }
                 }
+                writeReportRow(toReportRow(trackEntity,
+                        preexistingCatalog.findTrackById(trackEntity.getId()),
+                        preexistingCatalog.matchTracksByArtistAlbumAndName(trackEntity)));
             }
         }
-        saveTracksToCatalog(tracks, childTracksByArtistId, childTracksByAlbumId);
-    }
-
-    private void saveTracksToCatalog(List<Track> tracks, Map<String, List<Track>> childTracksByArtistId, Map<String,
-            List<Track>> childTracksByAlbumId) throws IOException {
-        CatalogPersistence persistence = new CatalogPersistence();
-
-        try {
-            persistence.saveTracks(tracks);
-            persistence.associateTracksToArtists(childTracksByArtistId);
-            persistence.associateTracksToAlbums(childTracksByAlbumId);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        } finally {
-            persistence.getThreadPoolExecutor().shutdown();
-        }
-
-        for (Future<Track> task : persistence.getTasks()) {
-            try {
-                Track success = task.get();
-                System.out.printf(
-                        "Success:%n\t%s%n",
-                        jsonAdapter.writeValueAsString(success)
-                );
-            } catch (InterruptedException | ExecutionException e) {
-                throw new RuntimeException(e);
-            }
+        if (live) {
+            bulkTrackPersistence.saveTracksToCatalog(tracks, childTracksByArtistId, childTracksByAlbumId);
         }
     }
 
