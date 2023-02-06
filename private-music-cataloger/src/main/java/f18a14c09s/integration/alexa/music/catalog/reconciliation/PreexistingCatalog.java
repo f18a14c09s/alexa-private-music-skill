@@ -22,6 +22,9 @@ public class PreexistingCatalog {
     private Map<List<String>, List<Album>> albumsByArtistAndName;
     private Map<List<String>, List<Track>> tracksByArtistAlbumAndName;
 
+    PreexistingCatalog() {
+    }
+
     public Track findTrackById(String trackId) {
         return tracksById.get(trackId);
     }

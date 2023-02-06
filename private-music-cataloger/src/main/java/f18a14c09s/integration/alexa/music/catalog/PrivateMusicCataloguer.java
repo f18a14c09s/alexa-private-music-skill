@@ -56,7 +56,7 @@ class PrivateMusicCataloguer {
     private CsvFileWriter reportWriter;
     private Locale en_US;
     private Art defaultArt;
-    private PreexistingCatalog preexistingCatalog = new PreexistingCatalog();
+    private PreexistingCatalog preexistingCatalog;
 
     public interface ExceptionalSupplier<T> {
         T get() throws Exception;
@@ -96,8 +96,8 @@ class PrivateMusicCataloguer {
                 destStrNumDynamodbTableName
         );
         //
-        loadPreexistingCatalog(catalogDao);
         this.entityFactory = new EntityFactory(en_US);
+        this.preexistingCatalog = loadPreexistingCatalog(catalogDao);
         this.bulkTrackPersistence = new BulkTrackPersistence(catalogDao);
     }
 
