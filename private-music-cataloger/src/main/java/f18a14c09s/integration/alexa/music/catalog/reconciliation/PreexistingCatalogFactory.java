@@ -3,7 +3,10 @@ package f18a14c09s.integration.alexa.music.catalog.reconciliation;
 import f18a14c09s.integration.alexa.music.catalog.DynamoDBCatalogDAO;
 import f18a14c09s.integration.alexa.music.entities.*;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -80,42 +83,6 @@ public class PreexistingCatalogFactory {
                 }
             }
         }
-        //
-        Map<EntityType, Map<List<String>, String>> entityIdsByTypeAndNaturalKey = new HashMap<>();
-        for (Map.Entry<String, List<Artist>> artistNameArtists : preexistingCatalog.getArtistsByName().entrySet()) {
-            if (artistNameArtists.getValue().size() > 1) {
-                System.out.printf("More than one artist (%s total) with name \"%s\" found.%n",
-                        artistNameArtists.getValue()
-                                .size(), artistNameArtists.getKey());
-                entityIdsByTypeAndNaturalKey.computeIfAbsent(EntityType.ARTIST, key -> new HashMap<>()).put(
-                        List.of(artistNameArtists.getKey()), artistNameArtists.getValue().get(0).getId()
-                );
-            }
-        }
-        for (Map.Entry<List<String>, List<Album>> albumArtistNameAlbums : preexistingCatalog.getAlbumsByArtistAndName()
-                .entrySet()) {
-            if (albumArtistNameAlbums.getValue().size() > 1) {
-                System.out.printf("More than one album (%s total) with (artist, name) \"%s\" found.%n",
-                        albumArtistNameAlbums.getValue()
-                                .size(), albumArtistNameAlbums.getKey());
-                entityIdsByTypeAndNaturalKey.computeIfAbsent(EntityType.ALBUM, key -> new HashMap<>()).put(
-                        albumArtistNameAlbums.getKey(), albumArtistNameAlbums.getValue().get(0).getId()
-                );
-            }
-        }
-        for (Map.Entry<List<String>, List<Track>> trackArtistAlbumNameTracks :
-                preexistingCatalog.getTracksByArtistAlbumAndName()
-                        .entrySet()) {
-            if (trackArtistAlbumNameTracks.getValue().size() > 1) {
-                System.out.printf("More than one track (%s total) with (artist, album, name) \"%s\" found.%n",
-                        trackArtistAlbumNameTracks.getValue()
-                                .size(), trackArtistAlbumNameTracks.getKey());
-                entityIdsByTypeAndNaturalKey.computeIfAbsent(EntityType.TRACK, key -> new HashMap<>()).put(
-                        trackArtistAlbumNameTracks.getKey(), trackArtistAlbumNameTracks.getValue().get(0).getId()
-                );
-            }
-        }
-        preexistingCatalog.setEntityIdsByTypeAndNaturalKey(entityIdsByTypeAndNaturalKey);
         //
         return preexistingCatalog;
     }

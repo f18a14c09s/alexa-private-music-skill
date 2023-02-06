@@ -222,8 +222,7 @@ class PrivateMusicCataloguer {
                         artist = existingMatches.iterator().next();
                     }
                     artists.put(artistName, artist);
-                    writeReportRow(toReportRow(artist, preexistingCatalog.findArtistById(artist.getId()),
-                            existingMatches));
+                    writeReportRow(toReportRow(artist, existingMatches));
                 }
             }
         }
@@ -261,8 +260,7 @@ class PrivateMusicCataloguer {
                         album = existingMatches.iterator().next();
                     }
                     albums.put(keyAsList, album);
-                    writeReportRow(toReportRow(album, preexistingCatalog.findAlbumById(album.getId()),
-                            existingMatches));
+                    writeReportRow(toReportRow(album, existingMatches));
                 }
             }
         }

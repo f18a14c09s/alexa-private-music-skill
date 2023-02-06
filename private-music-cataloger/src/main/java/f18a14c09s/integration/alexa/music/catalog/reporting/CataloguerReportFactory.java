@@ -23,17 +23,16 @@ public class CataloguerReportFactory {
         return new RowBuilder();
     }
 
-    public static List<String> toReportRow(Artist artist, Artist exactIdMatch, Collection<Artist> matchesByName) {
+    public static List<String> toReportRow(Artist artist, Collection<Artist> matchesByName) {
         return CataloguerReportFactory.rowBuilder()
                 .entityType(EntityType.ARTIST)
                 .entityId(artist.getId())
                 .artistName(artist.getNames().get(0).getValue())
-                .existingMatchById(exactIdMatch != null)
                 .totalExistingMatchesByNames(Optional.ofNullable(matchesByName).stream().count())
                 .build();
     }
 
-    public static List<String> toReportRow(Album album, Album exactIdMatch, Collection<Album> matchesByName) {
+    public static List<String> toReportRow(Album album, Collection<Album> matchesByName) {
         List<ArtistReference> artistReferences = Optional.ofNullable(album.getArtists())
                 .orElse(List.of());
         return CataloguerReportFactory.rowBuilder()
@@ -53,7 +52,6 @@ public class CataloguerReportFactory {
                         .findAny()
                         .orElse(null))
                 .totalArtistMatches(artistReferences.size())
-                .existingMatchById(exactIdMatch != null)
                 .totalExistingMatchesByNames(Optional.ofNullable(matchesByName).stream().count())
                 .build();
     }

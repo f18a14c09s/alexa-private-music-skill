@@ -2,6 +2,7 @@ package f18a14c09s.integration.alexa.music.catalog.reconciliation;
 
 import f18a14c09s.integration.alexa.music.catalog.AlbumKey;
 import f18a14c09s.integration.alexa.music.entities.*;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -11,8 +12,8 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-@Getter
-@Setter
+@Getter(AccessLevel.PACKAGE)
+@Setter(AccessLevel.PACKAGE)
 public class PreexistingCatalog {
     private Map<String, Artist> artistsById;
     private Map<String, Album> albumsById;
@@ -20,15 +21,6 @@ public class PreexistingCatalog {
     private Map<String, List<Artist>> artistsByName;
     private Map<List<String>, List<Album>> albumsByArtistAndName;
     private Map<List<String>, List<Track>> tracksByArtistAlbumAndName;
-    private Map<EntityType, Map<List<String>, String>> entityIdsByTypeAndNaturalKey;
-
-    public Artist findArtistById(String artistId) {
-        return artistsById.get(artistId);
-    }
-
-    public Album findAlbumById(String albumId) {
-        return albumsById.get(albumId);
-    }
 
     public Track findTrackById(String trackId) {
         return tracksById.get(trackId);
