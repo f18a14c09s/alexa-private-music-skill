@@ -13,7 +13,6 @@ import java.util.stream.Collectors;
 
 import static f18a14c09s.integration.alexa.data.Language.en;
 import static f18a14c09s.integration.alexa.music.entities.ReleaseType.StudioAlbum;
-import static f18a14c09s.util.CollectionUtil.asArrayList;
 
 public class EntityFactory {
     private Locale defaultLocale;
@@ -21,17 +20,18 @@ public class EntityFactory {
 
     public EntityFactory(Locale defaultLocale, Map<EntityType, Map<List<String>, String>> existingEntities) {
         this.defaultLocale = defaultLocale;
-        this.entityIdsByTypeAndNaturalKey = Optional.ofNullable(existingEntities).orElse(Arrays.stream(EntityType.values()).collect(
-                Collectors.toMap(
-                        Function.identity(),
-                        entityType -> new HashMap<>()
-                )
-        ));
+        this.entityIdsByTypeAndNaturalKey =
+                Optional.ofNullable(existingEntities).orElse(Arrays.stream(EntityType.values()).collect(
+                        Collectors.toMap(
+                                Function.identity(),
+                                entityType -> new HashMap<>()
+                        )
+                ));
     }
 
     public Artist newArtistEntity(String artistName, Art art) {
         Artist retval = new Artist();
-        retval.setNames(asArrayList(new EntityName(en, artistName)));
+        retval.setNames(List.of(new EntityName(en, artistName)));
         retval.setPopularity(Popularity.unratedWithNoOverrides());
 //        retval.setLastUpdatedTime(Calendar.getInstance());
         retval.setLastUpdatedTime(ZonedDateTime.now());
@@ -42,7 +42,7 @@ public class EntityFactory {
                         ).get(Collections.singletonList(artistName))
                 ).orElseGet(() -> UUID.randomUUID().toString())
         );
-        retval.setLocales(asArrayList(defaultLocale));
+        retval.setLocales(List.of(defaultLocale));
         retval.setArt(art);
         return retval;
     }
@@ -56,24 +56,25 @@ public class EntityFactory {
                 .map(EntityName::getValue)
                 .orElse(null);
         Album retval = new Album();
-        retval.setLanguageOfContent(asArrayList(en));
-        retval.setNames(asArrayList(new EntityName(en, albumName)));
+        retval.setLanguageOfContent(List.of(en));
+        retval.setNames(List.of(new EntityName(en, albumName)));
         retval.setPopularity(Popularity.unratedWithNoOverrides());
         retval.setReleaseType(StudioAlbum.getTitle());
 //        retval.setLastUpdatedTime(Calendar.getInstance());
         retval.setLastUpdatedTime(ZonedDateTime.now());
         retval.setId(Optional.ofNullable(entityIdsByTypeAndNaturalKey.get(EntityType.ALBUM)
-                .get(asArrayList(artistName, albumName))).orElseGet(() -> UUID.randomUUID().toString()));
-        retval.setLocales(asArrayList(defaultLocale));
-        retval.setArtists(asArrayList(artistReference));
+                .get(List.of(artistName, albumName))).orElseGet(() -> UUID.randomUUID().toString()));
+        retval.setLocales(List.of(defaultLocale));
+        retval.setArtists(List.of(artistReference));
         retval.setArt(art);
         return retval;
     }
 
-    public Track newTrackEntity(TrackMetadata mp3, String url, Collection<ArtistReference> artists, AlbumReference album, Art art) {
+    public Track newTrackEntity(TrackMetadata mp3, String url, Collection<ArtistReference> artists,
+                                AlbumReference album, Art art) {
         Track retval = new Track();
-        retval.setLanguageOfContent(asArrayList(en));
-        retval.setNames(asArrayList(new EntityName(en, mp3.getTitle())));
+        retval.setLanguageOfContent(List.of(en));
+        retval.setNames(List.of(new EntityName(en, mp3.getTitle())));
         retval.setDurationSeconds(mp3.getDurationSeconds());
         retval.setNaturalOrder(mp3.getTrackNumber());
         retval.setPopularity(Popularity.unratedWithNoOverrides());
@@ -81,8 +82,8 @@ public class EntityFactory {
 //        retval.setLastUpdatedTime(Calendar.getInstance());
         retval.setLastUpdatedTime(ZonedDateTime.now());
         retval.setArtists(List.copyOf(artists));
-        retval.setAlbums(asArrayList(album));
-        retval.setLocales(asArrayList(defaultLocale));
+        retval.setAlbums(List.of(album));
+        retval.setLocales(List.of(defaultLocale));
         retval.setUrl(url);
         retval.setArt(art);
 //        String artistName = artist.getNames().get(0).getValue();
