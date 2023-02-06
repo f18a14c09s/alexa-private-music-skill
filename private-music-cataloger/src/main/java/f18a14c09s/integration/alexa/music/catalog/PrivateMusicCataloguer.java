@@ -17,6 +17,7 @@ import f18a14c09s.integration.mp3.Mp3Folder;
 import f18a14c09s.integration.mp3.TrackMetadata;
 import f18a14c09s.util.CsvFileWriter;
 import lombok.Getter;
+import lombok.Setter;
 import org.jaudiotagger.audio.exceptions.InvalidAudioFrameException;
 import org.jaudiotagger.audio.exceptions.ReadOnlyFileException;
 import org.jaudiotagger.tag.TagException;
@@ -32,6 +33,7 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -55,6 +57,100 @@ class PrivateMusicCataloguer {
     private CsvFileWriter reportWriter;
     private Locale en_US;
     private Art defaultArt;
+    private PreexistingCatalog preexistingCatalog = new PreexistingCatalog();
+
+    @Getter
+    @Setter
+    private static class PreexistingCatalog {
+        private Map<String, Artist> artistsById;
+        private Map<String, Album> albumsById;
+        private Map<String, Track> tracksById;
+        private Map<String, List<Artist>> artistsByName;
+        private Map<List<String>, List<Album>> albumsByArtistAndName;
+        private Map<List<String>, List<Track>> tracksByArtistAlbumAndName;
+
+        public Artist findArtistById(String artistId) {
+            return artistsById.get(artistId);
+        }
+
+        public Album findAlbumById(String albumId) {
+            return albumsById.get(albumId);
+        }
+
+        public Track findTrackById(String trackId) {
+            return tracksById.get(trackId);
+        }
+
+        public Collection<Artist> matchArtistsByName(Artist artist) {
+            return Optional.ofNullable(artist.getNames())
+                    .orElse(List.of())
+                    .stream()
+                    .flatMap(name -> artistsByName.get(name.getValue()).stream())
+                    .collect(Collectors.toMap(BaseEntity::getId, Function.identity(), (lhs, rhs) -> lhs))
+                    .values();
+        }
+
+        public Collection<Album> matchAlbumsByArtistAndName(Album album) {
+            List<List<String>>
+                    artistsAndNames =
+                    album.getNames()
+                            .stream()
+                            .map(EntityName::getValue)
+                            .flatMap(albumName -> album.getArtists()
+                                    .stream()
+                                    .flatMap(artistReference -> artistReference.getNames().stream())
+                                    .map(EntityName::getValue)
+                                    .map(artistName -> List.of(artistName, albumName)))
+                            .collect(Collectors.toList());
+            return artistsAndNames
+                    .stream()
+                    .flatMap(artistNameAlbumName -> albumsByArtistAndName.computeIfAbsent(artistNameAlbumName,
+                                    key -> List.of())
+                            .stream())
+                    .collect(Collectors.toMap(BaseEntity::getId, Function.identity(), (lhs, rhs) -> lhs))
+                    .values();
+        }
+
+        public Collection<Track> matchTracksByArtistAlbumAndName(Track track) {
+            List<List<String>>
+                    artistsAlbumsAndNames =
+                    track.getNames()
+                            .stream()
+                            .map(EntityName::getValue)
+                            .flatMap(trackName -> track.getArtists()
+                                    .stream()
+                                    .flatMap(artistReference -> artistReference.getNames().stream())
+                                    .map(EntityName::getValue)
+                                    .flatMap(artistName -> track.getAlbums()
+                                            .stream()
+                                            .flatMap(albumReference -> albumReference.getNames()
+                                                    .stream()
+                                                    .map(EntityName::getValue)
+                                                    .map(albumName -> List.of(artistName, albumName, trackName)))))
+                            .collect(Collectors.toList());
+            return artistsAlbumsAndNames
+                    .stream()
+                    .flatMap(artistNameAlbumName -> tracksByArtistAlbumAndName.computeIfAbsent(artistNameAlbumName,
+                                    key -> List.of())
+                            .stream())
+                    .collect(Collectors.toMap(BaseEntity::getId, Function.identity(), (lhs, rhs) -> lhs))
+                    .values();
+        }
+    }
+
+    public interface ExceptionalSupplier<T> {
+        T get() throws Exception;
+
+        static <T> T wrap(
+                ExceptionalSupplier<T> supplier
+        ) {
+            try {
+                return supplier.get();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
 
     PrivateMusicCataloguer(String sourceS3BucketName,
                            String sourceS3Prefix,
@@ -76,12 +172,13 @@ class PrivateMusicCataloguer {
         this.defaultArt = defaultArtObject(imageBaseUrl);
         this.en_US = Locale.en_US();
         Map<EntityType, Map<List<String>, String>> entityIdsByTypeAndNaturalKey = null;
-        if (live) {
-            this.catalogDAO = new DynamoDBCatalogDAO(
-                    destStrStrDynamodbTableName,
-                    destStrNumDynamodbTableName
-            );
-        }
+        this.catalogDAO = new DynamoDBCatalogDAO(
+                destStrStrDynamodbTableName,
+                destStrNumDynamodbTableName
+        );
+        //
+        loadPreexistingCatalog();
+        //
         entityIdsByTypeAndNaturalKey = Map.of(
                 EntityType.ARTIST,
                 new HashMap<>(),
@@ -92,16 +189,74 @@ class PrivateMusicCataloguer {
         this.entityFactory = new EntityFactory(en_US, entityIdsByTypeAndNaturalKey);
     }
 
-    public interface ExceptionalSupplier<T> {
-        T get() throws Exception;
-
-        static <T> T wrap(
-                ExceptionalSupplier<T> supplier
-        ) {
-            try {
-                return supplier.get();
-            } catch (Exception e) {
-                throw new RuntimeException(e);
+    private void loadPreexistingCatalog() {
+        List<Artist>
+                artists =
+                catalogDAO.listArtists()
+                        .stream()
+                        .filter(artist -> artist.getDeleted() == null || !artist.getDeleted())
+                        .collect(Collectors.toList());
+        List<Album>
+                albums =
+                catalogDAO.listAlbums()
+                        .stream()
+                        .filter(album -> album.getDeleted() == null || !album.getDeleted())
+                        .collect(Collectors.toList());
+        List<Track>
+                tracks =
+                catalogDAO.listTracks()
+                        .stream()
+                        .filter(track -> track.getDeleted() == null || !track.getDeleted())
+                        .collect(Collectors.toList());
+        //
+        preexistingCatalog.setArtistsById(artists.stream()
+                .collect(Collectors.toMap(BaseEntity::getId, Function.identity())));
+        preexistingCatalog.setArtistsByName(new HashMap<>());
+        for (Artist artist : artists) {
+            for (EntityName name : Optional.ofNullable(artist.getNames()).orElse(List.of())) {
+                preexistingCatalog.getArtistsByName().computeIfAbsent(
+                        name.getValue(), key -> new ArrayList<>()
+                ).add(artist);
+            }
+        }
+        //
+        preexistingCatalog.setAlbumsById(albums.stream()
+                .collect(Collectors.toMap(BaseEntity::getId, Function.identity())));
+        preexistingCatalog.setAlbumsByArtistAndName(new HashMap<>());
+        for (Album album : albums) {
+            for (EntityName albumName : Optional.ofNullable(album.getNames()).orElse(List.of())) {
+                for (ArtistReference artistReference : Optional.ofNullable(album.getArtists()).orElse(List.of())) {
+                    for (EntityName artistName : Optional.ofNullable(artistReference.getNames()).orElse(List.of())) {
+                        List<String> artistAndName = List.of(artistName.getValue(), albumName.getValue());
+                        preexistingCatalog.getAlbumsByArtistAndName().computeIfAbsent(
+                                artistAndName, key -> new ArrayList<>()
+                        ).add(album);
+                    }
+                }
+            }
+        }
+        //
+        preexistingCatalog.setTracksById(tracks.stream()
+                .collect(Collectors.toMap(BaseEntity::getId, Function.identity())));
+        preexistingCatalog.setTracksByArtistAlbumAndName(new HashMap<>());
+        for (Track track : tracks) {
+            for (EntityName trackName : Optional.ofNullable(track.getNames()).orElse(List.of())) {
+                for (AlbumReference albumReference : track.getAlbums()) {
+                    for (EntityName albumName : Optional.ofNullable(albumReference.getNames()).orElse(List.of())) {
+                        for (ArtistReference artistReference : Optional.ofNullable(track.getArtists())
+                                .orElse(List.of())) {
+                            for (EntityName artistName : Optional.ofNullable(artistReference.getNames())
+                                    .orElse(List.of())) {
+                                List<String>
+                                        artistAlbumAndName =
+                                        List.of(artistName.getValue(), albumName.getValue(), trackName.getValue());
+                                preexistingCatalog.getTracksByArtistAlbumAndName().computeIfAbsent(
+                                        artistAlbumAndName, key -> new ArrayList<>()
+                                ).add(track);
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -220,7 +375,8 @@ class PrivateMusicCataloguer {
             if (live) {
                 catalogDAO.save(artist);
             }
-            writeReportRow(toReportRow(artist));
+            writeReportRow(toReportRow(artist, preexistingCatalog.findArtistById(artist.getId()),
+                    preexistingCatalog.matchArtistsByName(artist)));
         }
         return artists;
     }
@@ -248,7 +404,8 @@ class PrivateMusicCataloguer {
             if (live) {
                 catalogDAO.save(album);
             }
-            writeReportRow(toReportRow(album));
+            writeReportRow(toReportRow(album, preexistingCatalog.findAlbumById(album.getId()),
+                    preexistingCatalog.matchAlbumsByArtistAndName(album)));
         }
         return albums;
     }
@@ -302,7 +459,9 @@ class PrivateMusicCataloguer {
                                                 throw e;
                                             }
                                         }
-                                        writeReportRow(toReportRow(track));
+                                        writeReportRow(toReportRow(track,
+                                                preexistingCatalog.findTrackById(track.getId()),
+                                                preexistingCatalog.matchTracksByArtistAlbumAndName(track)));
                                         return track;
                                     }
                             ).collect(Collectors.toList())
