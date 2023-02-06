@@ -44,7 +44,7 @@ class PrivateMusicCataloguer {
     private String baseUrl;
     private String imageBaseUrl;
     private boolean live;
-    private DynamoDBCatalogDAO catalogDAO;
+    private DynamoDBCatalogDAO catalogDao;
     private EntityFactory entityFactory;
     private Mp3Adapter mp3Adapter;
     private JSONAdapter jsonAdapter;
@@ -91,14 +91,14 @@ class PrivateMusicCataloguer {
         //
         this.defaultArt = defaultArtObject(imageBaseUrl);
         this.en_US = Locale.en_US();
-        this.catalogDAO = new DynamoDBCatalogDAO(
+        this.catalogDao = new DynamoDBCatalogDAO(
                 destStrStrDynamodbTableName,
                 destStrNumDynamodbTableName
         );
         //
-        loadPreexistingCatalog(catalogDAO);
+        loadPreexistingCatalog(catalogDao);
         this.entityFactory = new EntityFactory(en_US);
-        this.bulkTrackPersistence = new BulkTrackPersistence(catalogDAO);
+        this.bulkTrackPersistence = new BulkTrackPersistence(catalogDao);
     }
 
     private CsvFileWriter newReportWriter() throws IOException {
@@ -209,14 +209,14 @@ class PrivateMusicCataloguer {
                     if (existingMatches == null || existingMatches.isEmpty()) {
                         artist = entityFactory.newArtistEntity(artistName, art);
                         if (live) {
-                            catalogDAO.save(artist);
+                            catalogDao.save(artist);
                         }
                     } else {
                         if (live) {
                             for (Artist existingArtist : existingMatches) {
                                 existingArtist.setArt(art);
                                 existingArtist.setLastUpdatedTime(ZonedDateTime.now());
-                                catalogDAO.save(existingArtist);
+                                catalogDao.save(existingArtist);
                             }
                         }
                         artist = existingMatches.iterator().next();
@@ -248,14 +248,14 @@ class PrivateMusicCataloguer {
                                 artists.get(albumKey.getArtistName()),
                                 art);
                         if (live) {
-                            catalogDAO.save(album);
+                            catalogDao.save(album);
                         }
                     } else {
                         if (live) {
                             for (Album existingAlbum : existingMatches) {
                                 existingAlbum.setArt(art);
                                 existingAlbum.setLastUpdatedTime(ZonedDateTime.now());
-                                catalogDAO.save(existingAlbum);
+                                catalogDao.save(existingAlbum);
                             }
                         }
                         album = existingMatches.iterator().next();
@@ -367,7 +367,7 @@ class PrivateMusicCataloguer {
     private TrackMetadata parseTrackMetadata(S3MediaFile musicFile) {
         TrackMetadata trackMetadata = (
                 live ?
-                        catalogDAO.findTrackMetadata(musicFile.getPath()) :
+                        catalogDao.findTrackMetadata(musicFile.getPath()) :
                         null
         );
         if (trackMetadata != null) {
@@ -415,7 +415,7 @@ class PrivateMusicCataloguer {
                 persistenceTasks.add(executor.submit(
                         () -> {
                             if (live) {
-                                catalogDAO.save(trackMetadata);
+                                catalogDao.save(trackMetadata);
                             }
                             writeReportRow(toReportRow(trackMetadata));
                         }
