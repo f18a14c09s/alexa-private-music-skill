@@ -171,7 +171,6 @@ class PrivateMusicCataloguer {
         //
         this.defaultArt = defaultArtObject(imageBaseUrl);
         this.en_US = Locale.en_US();
-        Map<EntityType, Map<List<String>, String>> entityIdsByTypeAndNaturalKey = null;
         this.catalogDAO = new DynamoDBCatalogDAO(
                 destStrStrDynamodbTableName,
                 destStrNumDynamodbTableName
@@ -179,13 +178,40 @@ class PrivateMusicCataloguer {
         //
         loadPreexistingCatalog();
         //
-        entityIdsByTypeAndNaturalKey = Map.of(
-                EntityType.ARTIST,
-                new HashMap<>(),
-                EntityType.ALBUM,
-                new HashMap<>(),
-                EntityType.TRACK,
-                new HashMap<>());
+        Map<EntityType, Map<List<String>, String>> entityIdsByTypeAndNaturalKey = new HashMap<>();
+        for (Map.Entry<String, List<Artist>> artistNameArtists : preexistingCatalog.getArtistsByName().entrySet()) {
+            if (artistNameArtists.getValue().size() > 1) {
+                System.out.printf("More than one artist (%s total) with name \"%s\" found.%n",
+                        artistNameArtists.getValue()
+                                .size(), artistNameArtists.getKey());
+                entityIdsByTypeAndNaturalKey.computeIfAbsent(EntityType.ARTIST, key -> new HashMap<>()).put(
+                        List.of(artistNameArtists.getKey()), artistNameArtists.getValue().get(0).getId()
+                );
+            }
+        }
+        for (Map.Entry<List<String>, List<Album>> albumArtistNameAlbums : preexistingCatalog.getAlbumsByArtistAndName()
+                .entrySet()) {
+            if (albumArtistNameAlbums.getValue().size() > 1) {
+                System.out.printf("More than one album (%s total) with (artist, name) \"%s\" found.%n",
+                        albumArtistNameAlbums.getValue()
+                                .size(), albumArtistNameAlbums.getKey());
+                entityIdsByTypeAndNaturalKey.computeIfAbsent(EntityType.ALBUM, key -> new HashMap<>()).put(
+                        albumArtistNameAlbums.getKey(), albumArtistNameAlbums.getValue().get(0).getId()
+                );
+            }
+        }
+        for (Map.Entry<List<String>, List<Track>> trackArtistAlbumNameTracks :
+                preexistingCatalog.getTracksByArtistAlbumAndName()
+                .entrySet()) {
+            if (trackArtistAlbumNameTracks.getValue().size() > 1) {
+                System.out.printf("More than one track (%s total) with (artist, album, name) \"%s\" found.%n",
+                        trackArtistAlbumNameTracks.getValue()
+                                .size(), trackArtistAlbumNameTracks.getKey());
+                entityIdsByTypeAndNaturalKey.computeIfAbsent(EntityType.TRACK, key -> new HashMap<>()).put(
+                        trackArtistAlbumNameTracks.getKey(), trackArtistAlbumNameTracks.getValue().get(0).getId()
+                );
+            }
+        }
         this.entityFactory = new EntityFactory(en_US, entityIdsByTypeAndNaturalKey);
     }
 
@@ -270,7 +296,7 @@ class PrivateMusicCataloguer {
                         ).replaceAll(":", "-")
                 )
         );
-        System.out.printf("Writing report to %s.%n", outputFile.getAbsolutePath());
+        System.out.printf("Report will be written to %s.%n", outputFile.getAbsolutePath());
         return CsvFileWriter.from(
                 outputFile,
                 CataloguerReportFactory.DEFAULT_HEADER
