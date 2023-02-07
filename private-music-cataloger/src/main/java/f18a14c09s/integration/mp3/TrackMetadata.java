@@ -4,8 +4,11 @@ import lombok.Getter;
 import lombok.Setter;
 import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbBean;
 
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.Set;
+
+import static f18a14c09s.util.CollectionUtil.asArrayList;
 
 @Getter
 @Setter
@@ -43,5 +46,12 @@ public class TrackMetadata {
         this.trackNumber = trackNumber;
         this.lastTrackNumber = lastTrackNumber;
         this.distinctArtistNames = distinctArtistNames;
+    }
+
+    public ArrayList<String> buildAlbumKey(String trackArtistName) {
+        return asArrayList(
+                trackArtistName,
+                getAlbum()
+        );
     }
 }

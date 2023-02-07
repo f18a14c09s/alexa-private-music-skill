@@ -282,10 +282,7 @@ class PrivateMusicCataloguer {
                 .collect(Collectors.toList());
         System.out.println(jsonAdapter.writeValueAsString(metadata));
         AlbumReference trackAlbum = trackArtistNames.stream().filter(Objects::nonNull).map(
-                trackArtistName -> asArrayList(
-                        trackArtistName,
-                        metadata.getAlbum()
-                )
+                metadata::buildAlbumKey
         ).map(albums::get).filter(Objects::nonNull).findAny().get();
         return entityFactory.newTrackEntity(metadata,
                 buildUrl(metadata.getFilePath()),
@@ -294,12 +291,25 @@ class PrivateMusicCataloguer {
                 Optional.ofNullable(folder.getArt()).orElse(defaultArt));
     }
 
+    public static class ArrayListValueHashMap<K, V> extends HashMap<K, List<V>> {
+        private List<V> newArrayList(K key) {
+            return new ArrayList<>();
+        }
+
+        public List<V> computeNewListIfAbsent(K key) {
+            return computeIfAbsent(
+                    key,
+                    this::newArrayList
+            );
+        }
+    }
+
     private void deduplicateAndCatalogTracks(Mp3Folder rootMp3Folder,
                                              Map<String, ArtistReference> artists,
                                              Map<ArrayList<String>, AlbumReference> albums) throws IOException {
         List<Track> tracks = new ArrayList<>();
-        Map<String, List<Track>> childTracksByArtistId = new HashMap<>();
-        Map<String, List<Track>> childTracksByAlbumId = new HashMap<>();
+        ArrayListValueHashMap<String, Track> childTracksByArtistId = new ArrayListValueHashMap<>();
+        ArrayListValueHashMap<String, Track> childTracksByAlbumId = new ArrayListValueHashMap<>();
         List<Mp3Folder> mp3Folders = asArrayList(rootMp3Folder);
         Map<String, String> trackUrlsById = new HashMap<>();
 
@@ -325,15 +335,13 @@ class PrivateMusicCataloguer {
 //                        System.out.println(
 //                                jsonAdapter.writeValueAsString(artistReference)
 //                        );
-                        childTracksByArtistId.computeIfAbsent(
-                                artistReference.getId(),
-                                artistId -> new ArrayList<>()
+                        childTracksByArtistId.computeNewListIfAbsent(
+                                artistReference.getId()
                         ).add(trackEntity);
                     }
                     for (AlbumReference albumReference : trackEntity.getAlbums()) {
-                        childTracksByAlbumId.computeIfAbsent(
-                                albumReference.getId(),
-                                artistId -> new ArrayList<>()
+                        childTracksByAlbumId.computeNewListIfAbsent(
+                                albumReference.getId()
                         ).add(trackEntity);
                     }
                 }
@@ -362,39 +370,63 @@ class PrivateMusicCataloguer {
         return new Mp3Folder(mp3s, catalogAlbumArt(folderReference.getArtFiles()), level, children);
     }
 
-    private TrackMetadata parseTrackMetadata(S3MediaFile musicFile) {
-        TrackMetadata trackMetadata = (
-                live ?
-                        catalogDao.findTrackMetadata(musicFile.getPath()) :
-                        null
-        );
-        if (trackMetadata != null) {
+    private class TrackMetadataParser {
+        private S3MediaFile musicFile;
+
+        public TrackMetadataParser(S3MediaFile musicFile) {
+            this.musicFile = musicFile;
+        }
+
+        public TrackMetadata parseTrackMetadata() {
+            TrackMetadata trackMetadata = (
+                    live ?
+                            catalogDao.findTrackMetadata(musicFile.getPath()) :
+                            null
+            );
+            if (trackMetadata != null) {
+                System.out.printf(
+                        "Track metadata found in DynamoDB for S3 object %s.%n",
+                        musicFile.getS3Key()
+                );
+                return trackMetadata;
+            }
             System.out.printf(
-                    "Track metadata found in DynamoDB for S3 object %s.%n",
+                    "Retrieving S3 object %s.%n",
                     musicFile.getS3Key()
             );
-            return trackMetadata;
+            try (InputStream s3InputStream = s3Client.getObject(
+                    GetObjectRequest.builder().bucket(
+                            sourceS3BucketName
+                    ).key(
+                            musicFile.getS3Key()
+                    ).build()
+            )) {
+                TrackMetadata track = mp3Adapter.parseMetadata(
+                        s3InputStream
+                );
+                track.setFilePath(musicFile.getPath());
+                track.setAlbum(Optional.ofNullable(track.getAlbum()).orElse("Unknown"));
+                track.setTitle(Optional.ofNullable(track.getTitle()).orElse("Unknown"));
+                return track;
+            } catch (IOException | InvalidAudioFrameException | TagException | ReadOnlyFileException e) {
+                throw new RuntimeException(String.format("Failure retrieving or parsing %s.", musicFile.getS3Key()), e);
+            }
         }
-        System.out.printf(
-                "Retrieving S3 object %s.%n",
-                musicFile.getS3Key()
-        );
-        try (InputStream s3InputStream = s3Client.getObject(
-                GetObjectRequest.builder().bucket(
-                        sourceS3BucketName
-                ).key(
-                        musicFile.getS3Key()
-                ).build()
-        )) {
-            TrackMetadata track = mp3Adapter.parseMetadata(
-                    s3InputStream
-            );
-            track.setFilePath(musicFile.getPath());
-            track.setAlbum(Optional.ofNullable(track.getAlbum()).orElse("Unknown"));
-            track.setTitle(Optional.ofNullable(track.getTitle()).orElse("Unknown"));
-            return track;
-        } catch (IOException | InvalidAudioFrameException | TagException | ReadOnlyFileException e) {
-            throw new RuntimeException(String.format("Failure retrieving or parsing %s.", musicFile.getS3Key()), e);
+    }
+
+    private Callable<TrackMetadata> newTrackMetadataParsingTask(S3MediaFile musicFile) {
+        return new TrackMetadataParser(musicFile)::parseTrackMetadata;
+    }
+
+    private class TrackMetadataPersistenceTask {
+        private TrackMetadata trackMetadata;
+
+        public TrackMetadataPersistenceTask(TrackMetadata trackMetadata) {
+            this.trackMetadata = trackMetadata;
+        }
+
+        public void saveTrackMetadata() {
+            catalogDao.save(trackMetadata);
         }
     }
 
@@ -403,21 +435,19 @@ class PrivateMusicCataloguer {
         ExecutorService executor = Executors.newFixedThreadPool(10);
         try {
             List<Future<TrackMetadata>> tasks = executor.invokeAll(musicFiles.stream()
-                    .<Callable<TrackMetadata>>map(s3Object -> (() -> parseTrackMetadata(s3Object)))
+                    .map(this::newTrackMetadataParsingTask)
                     .collect(Collectors.toList()));
             for (Future<TrackMetadata> task : tasks) {
                 trackMetadataList.add(task.get());
             }
             List<Future<?>> persistenceTasks = new ArrayList<>();
             for (TrackMetadata trackMetadata : trackMetadataList) {
-                persistenceTasks.add(executor.submit(
-                        () -> {
-                            if (live) {
-                                catalogDao.save(trackMetadata);
-                            }
-                            writeReportRow(toReportRow(trackMetadata));
-                        }
-                ));
+                if (live) {
+                    persistenceTasks.add(executor.submit(
+                            new TrackMetadataPersistenceTask(trackMetadata)::saveTrackMetadata
+                    ));
+                }
+                writeReportRow(toReportRow(trackMetadata));
             }
             for (Future<?> persistenceTask : persistenceTasks) {
                 persistenceTask.get();
@@ -430,17 +460,19 @@ class PrivateMusicCataloguer {
         return trackMetadataList;
     }
 
+    private ImageMetadata parseImageMetadata(S3MediaFile imageFile) {
+        try (InputStream s3InputStream = s3Client.getObject(GetObjectRequest.builder()
+                .bucket(sourceS3BucketName)
+                .key(imageFile.getS3Key())
+                .build())) {
+            return newImageMetadata(s3InputStream, buildUrl(imageFile.getPath()));
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to access image " + imageFile.getS3Key() + ".", e);
+        }
+    }
+
     private List<ImageMetadata> catalogAlbumArt(List<S3MediaFile> albumArtFiles) {
-        return albumArtFiles.stream().map(jpg -> {
-            try (InputStream s3InputStream = s3Client.getObject(GetObjectRequest.builder()
-                    .bucket(sourceS3BucketName)
-                    .key(jpg.getS3Key())
-                    .build())) {
-                return newImageMetadata(s3InputStream, buildUrl(jpg.getPath()));
-            } catch (IOException e) {
-                throw new RuntimeException("Failed to access image " + jpg.getS3Key() + ".", e);
-            }
-        }).distinct().collect(Collectors.toList());
+        return albumArtFiles.stream().map(this::parseImageMetadata).distinct().collect(Collectors.toList());
     }
 
     private ImageMetadata newImageMetadata(InputStream fis, String url) throws IOException {
