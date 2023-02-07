@@ -465,7 +465,7 @@ class PrivateMusicCataloguer {
                 .bucket(sourceS3BucketName)
                 .key(imageFile.getS3Key())
                 .build())) {
-            return newImageMetadata(s3InputStream, buildUrl(imageFile.getPath()));
+            return newImageMetadata(s3InputStream, buildImageUrl(imageFile.getPath()));
         } catch (IOException e) {
             throw new RuntimeException("Failed to access image " + imageFile.getS3Key() + ".", e);
         }
@@ -503,6 +503,12 @@ class PrivateMusicCataloguer {
     private String buildUrl(String relativePath) {
         return String.format("%s/%s",
                 baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.lastIndexOf("/")) : baseUrl,
+                relativePath);
+    }
+
+    private String buildImageUrl(String relativePath) {
+        return String.format("%s/%s",
+                imageBaseUrl.endsWith("/") ? imageBaseUrl.substring(0, imageBaseUrl.lastIndexOf("/")) : imageBaseUrl,
                 relativePath);
     }
 
