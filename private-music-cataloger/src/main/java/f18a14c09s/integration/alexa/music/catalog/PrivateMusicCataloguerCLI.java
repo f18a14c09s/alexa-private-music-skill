@@ -36,6 +36,10 @@ public class PrivateMusicCataloguerCLI {
         IMAGE_BASE_URL(
                 "--image-base-url",
                 List.of(UnaryOperator.identity())
+        ),
+        LIVE(
+                "--live",
+                List.of()
         );
         public final String longArgumentName;
         public final List<Function<String, ?>> argValueParsers;
@@ -57,20 +61,38 @@ public class PrivateMusicCataloguerCLI {
             IOException,
             NoSuchAlgorithmException {
         args.entrySet().forEach(arg -> System.out.printf("%s: %s%n", arg.getKey().longArgumentName, arg.getValue()));
+
+        boolean live = args.get(CommandLineArgument.LIVE) != null;
         List<String> validationErrors = new ArrayList<>();
+
         for (CommandLineArgument requiredArg :
                 Set.of(
                         CommandLineArgument.SOURCE_S3_BUCKET_NAME,
                         CommandLineArgument.SOURCE_S3_PREFIX,
                         CommandLineArgument.MUSIC_BASE_URL,
-                        CommandLineArgument.IMAGE_BASE_URL,
-                        CommandLineArgument.DESTINATION_STR_STR_DYNAMODB_TABLE_NAME,
-                        CommandLineArgument.DESTINATION_STR_NUM_DYNAMODB_TABLE_NAME
+                        CommandLineArgument.IMAGE_BASE_URL
                 )) {
             if (Optional.ofNullable(args.get(requiredArg)).filter(Predicate.not(List::isEmpty)).map(list -> list.get(0)).filter(value -> !(value instanceof String) || !String.class.cast(value).trim().isEmpty()).isEmpty()) {
                 validationErrors.add(String.format("Argument %s is required.", requiredArg.longArgumentName));
             }
         }
+
+        if(live) {
+            for (CommandLineArgument requiredArg :
+                    Set.of(
+                            CommandLineArgument.DESTINATION_STR_STR_DYNAMODB_TABLE_NAME,
+                            CommandLineArgument.DESTINATION_STR_NUM_DYNAMODB_TABLE_NAME
+                    )) {
+                if (Optional.ofNullable(args.get(requiredArg)).filter(Predicate.not(List::isEmpty)).map(list -> list.get(0)).filter(value -> !(value instanceof String) || !String.class.cast(value).trim().isEmpty()).isEmpty()) {
+                    validationErrors.add(String.format("Argument %s is required.", requiredArg.longArgumentName));
+                }
+            }
+        }
+
+        if (!validationErrors.isEmpty()) {
+            throw new IllegalArgumentException(validationErrors.toString());
+        }
+
         String sourceS3BucketName = Optional.ofNullable(
                 args.get(CommandLineArgument.SOURCE_S3_BUCKET_NAME)
         ).map(argValues -> argValues.get(0)).map(String.class::cast).orElse(null);
@@ -89,16 +111,15 @@ public class PrivateMusicCataloguerCLI {
         String destStrNumDynamodbTableName = Optional.ofNullable(
                 args.get(CommandLineArgument.DESTINATION_STR_NUM_DYNAMODB_TABLE_NAME)
         ).map(argValues -> argValues.get(0)).map(String.class::cast).orElse(null);
-        if (!validationErrors.isEmpty()) {
-            throw new IllegalArgumentException(validationErrors.toString());
-        }
+
         return new PrivateMusicCataloguer(
                 sourceS3BucketName,
                 sourceS3Prefix,
                 baseUrl,
                 imageBaseUrl,
                 destStrStrDynamodbTableName,
-                destStrNumDynamodbTableName
+                destStrNumDynamodbTableName,
+                live
         );
     }
 

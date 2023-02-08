@@ -10,12 +10,23 @@ import org.jaudiotagger.tag.id3.AbstractID3v2Tag;
 import org.jaudiotagger.tag.id3.ID3v1Tag;
 
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.logging.LogManager;
 import java.util.stream.Collectors;
 
 public class Mp3Adapter {
+    static {
+        try (ByteArrayInputStream logConfigStream =
+                     new ByteArrayInputStream("org.jaudiotagger.level=OFF".getBytes(StandardCharsets.UTF_8))) {
+            LogManager.getLogManager().updateConfiguration(logConfigStream, null);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
     public TrackMetadata parseMetadata(InputStream mp3Stream) throws
             IOException,
             InvalidAudioFrameException,

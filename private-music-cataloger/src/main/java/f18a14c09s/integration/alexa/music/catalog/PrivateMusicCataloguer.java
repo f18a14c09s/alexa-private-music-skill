@@ -1,9 +1,11 @@
 package f18a14c09s.integration.alexa.music.catalog;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import f18a14c09s.integration.alexa.data.Locale;
-import f18a14c09s.integration.alexa.music.catalog.data.MusicAlbumCatalog;
-import f18a14c09s.integration.alexa.music.catalog.data.MusicGroupCatalog;
-import f18a14c09s.integration.alexa.music.catalog.data.MusicRecordingCatalog;
+import f18a14c09s.integration.alexa.music.catalog.data.S3MediaFile;
+import f18a14c09s.integration.alexa.music.catalog.data.S3MediaFolder;
+import f18a14c09s.integration.alexa.music.catalog.reconciliation.PreexistingCatalog;
+import f18a14c09s.integration.alexa.music.catalog.reporting.CataloguerReportFactory;
 import f18a14c09s.integration.alexa.music.data.Art;
 import f18a14c09s.integration.alexa.music.data.ArtSource;
 import f18a14c09s.integration.alexa.music.data.ArtSourceSize;
@@ -13,115 +15,48 @@ import f18a14c09s.integration.mp3.ImageMetadata;
 import f18a14c09s.integration.mp3.Mp3Adapter;
 import f18a14c09s.integration.mp3.Mp3Folder;
 import f18a14c09s.integration.mp3.TrackMetadata;
+import f18a14c09s.util.CsvFileWriter;
 import org.jaudiotagger.audio.exceptions.InvalidAudioFrameException;
 import org.jaudiotagger.audio.exceptions.ReadOnlyFileException;
 import org.jaudiotagger.tag.TagException;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.*;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.*;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.Predicate;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static f18a14c09s.integration.alexa.music.catalog.reconciliation.PreexistingCatalogFactory.loadPreexistingCatalog;
+import static f18a14c09s.integration.alexa.music.catalog.reporting.CataloguerReportFactory.toReportRow;
 import static f18a14c09s.util.CollectionUtil.asArrayList;
 
 class PrivateMusicCataloguer {
-    public static final String MP3EXT = ".mp3";
-    public static final String JPGEXT = ".jpg";
-
     private String sourceS3BucketName;
-    private String sourceS3Prefix;
     private String baseUrl;
-    //    private String imageBaseUrl;
-//    private String destStrStrDynamodbTableName;
-//    private String destStrNumDynamodbTableName;
-    private DynamoDBCatalogDAO catalogDAO;
-    //    private CatalogDAO dao;
+    private String imageBaseUrl;
+    private boolean live;
+    private DynamoDBCatalogDAO catalogDao;
     private EntityFactory entityFactory;
     private Mp3Adapter mp3Adapter;
     private JSONAdapter jsonAdapter;
     private MessageDigest sha256Digester;
     private Base64.Encoder base64Encoder;
     private S3Client s3Client = S3Client.create();
+    private S3MusicDAO s3MusicDao;
+    private BulkTrackPersistence bulkTrackPersistence;
+    private CsvFileWriter reportWriter;
     private Locale en_US;
     private Art defaultArt;
-
-    PrivateMusicCataloguer(String sourceS3BucketName,
-                           String sourceS3Prefix,
-                           String baseUrl,
-                           String imageBaseUrl,
-                           String destStrStrDynamodbTableName,
-                           String destStrNumDynamodbTableName) throws IOException, NoSuchAlgorithmException {
-        this.sourceS3BucketName = sourceS3BucketName;
-        this.sourceS3Prefix = sourceS3Prefix;
-        this.baseUrl = baseUrl;
-//        this.imageBaseUrl = imageBaseUrl;
-//        this.destStrStrDynamodbTableName = destStrStrDynamodbTableName;
-//        this.destStrNumDynamodbTableName = destStrNumDynamodbTableName;
-        this.mp3Adapter = new Mp3Adapter();
-        this.jsonAdapter = new JSONAdapter();
-        this.sha256Digester = MessageDigest.getInstance("SHA-256");
-        this.base64Encoder = Base64.getEncoder();
-        //
-        this.defaultArt = defaultArtObject(imageBaseUrl);
-        this.en_US = Locale.en_US();
-        Map<EntityType, Map<List<String>, String>> entityIdsByTypeAndNaturalKey = null;
-        this.catalogDAO = new DynamoDBCatalogDAO(
-                destStrStrDynamodbTableName,
-                destStrNumDynamodbTableName
-        );
-//        this.dao = new CatalogDAO(Hbm2DdlAuto.create);
-//        dao.save(en_US);
-//        dao.save(defaultArt);
-//        dao.commit();
-//        en_US = dao.findLocale(en_US.getCountry(), en_US.getLanguage());
-        entityIdsByTypeAndNaturalKey = Map.of(
-                EntityType.ARTIST,
-                new HashMap<>(),
-                EntityType.ALBUM,
-                new HashMap<>(),
-                EntityType.TRACK,
-                new HashMap<>());
-        // entityIdsByTypeAndNaturalKey =
-        // dao.getCataloguedEntityIdsByTypeAndNaturalKey();
-//        Map<EntityType, Map<List<String>, Set<String>>> entityIdsByTypeAndNaturalKeyWithPotentialDuplicates = CatalogDirectoryReader
-//                .readCatalogDirectory(
-//                        Map.of(
-//                                EntityType.ARTIST,
-//                                new File(srcCatalogDir, "AMAZON.MusicGroup Catalog 8.json"),
-//                                EntityType.ALBUM,
-//                                new File(srcCatalogDir, "AMAZON.MusicAlbum Catalog 1643.json"),
-//                                EntityType.TRACK,
-//                                new File(srcCatalogDir, "AMAZON.MusicRecording Catalog 3680.json")));
-//        for (EntityType entityType : entityIdsByTypeAndNaturalKeyWithPotentialDuplicates.keySet()) {
-//            for (List<String> entityKey : entityIdsByTypeAndNaturalKeyWithPotentialDuplicates.get(entityType)
-//                    .keySet()) {
-//                Set<String> entityIds = entityIdsByTypeAndNaturalKeyWithPotentialDuplicates.get(entityType)
-//                        .get(entityKey);
-//                if (entityIds.size() > 1) {
-//                    System.out.printf(
-//                            "%s,%s has multiple entity IDs:%s%n",
-//                            entityType,
-//                            entityKey,
-//                            entityIds.stream().map(entityId -> String.format("%n\t%s", entityId))
-//                                    .collect(Collectors.joining()));
-//                }
-//                entityIdsByTypeAndNaturalKey.get(entityType).put(
-//                        entityKey,
-//                        entityIds.iterator().next()
-//                );
-//            }
-//        }
-        this.entityFactory = new EntityFactory(en_US, entityIdsByTypeAndNaturalKey);
-    }
+    private PreexistingCatalog preexistingCatalog;
 
     public interface ExceptionalSupplier<T> {
         T get() throws Exception;
@@ -137,49 +72,93 @@ class PrivateMusicCataloguer {
         }
     }
 
-    void catalogMusic() throws IOException, NoSuchAlgorithmException {
-        // System.out.printf("Locale %s-%s has ID %s.%n", en_US.getLanguage(),
-        // en_US.getCountry(), en_US.getId());
-        Mp3Folder rootMp3Folder = collectTrackInfoRecursivelyS3(sourceS3Prefix, 0);
-        printFolderSummary(rootMp3Folder);
-        Map<String, Artist> artists = catalogArtists(rootMp3Folder);
-        Map<String, String> artistIdToName = artists.entrySet()
-                .stream()
-                .collect(Collectors.toMap(entry -> entry.getValue().getId(), Map.Entry::getKey));
-        Map<String, ArtistReference> artistReferences = artists.values().stream().collect(Collectors.toMap(
-                artist -> artistIdToName.get(artist.getId()),
-                artist -> ExceptionalSupplier.wrap(
-                        () -> jsonAdapter.readValue(
-                                jsonAdapter.writeValueAsString(artist),
-                                ArtistReference.class
-                        )
+    PrivateMusicCataloguer(String sourceS3BucketName,
+                           String sourceS3Prefix,
+                           String baseUrl,
+                           String imageBaseUrl,
+                           String destStrStrDynamodbTableName,
+                           String destStrNumDynamodbTableName,
+                           boolean live) throws IOException, NoSuchAlgorithmException {
+        this.sourceS3BucketName = sourceS3BucketName;
+        this.baseUrl = baseUrl;
+        this.imageBaseUrl = imageBaseUrl;
+        this.live = live;
+        this.mp3Adapter = new Mp3Adapter();
+        this.jsonAdapter = new JSONAdapter();
+        this.sha256Digester = MessageDigest.getInstance("SHA-256");
+        this.base64Encoder = Base64.getEncoder();
+        this.s3MusicDao = new S3MusicDAO(sourceS3BucketName, sourceS3Prefix);
+        //
+        this.defaultArt = defaultArtObject(imageBaseUrl);
+        this.en_US = Locale.en_US();
+        this.catalogDao = new DynamoDBCatalogDAO(
+                destStrStrDynamodbTableName,
+                destStrNumDynamodbTableName
+        );
+        //
+        this.entityFactory = new EntityFactory(en_US);
+        this.preexistingCatalog = loadPreexistingCatalog(catalogDao);
+        this.bulkTrackPersistence = new BulkTrackPersistence(catalogDao);
+    }
+
+    private CsvFileWriter newReportWriter() throws IOException {
+        File outputFile = new File(
+                String.format(
+                        "Cataloguer Report %s.csv",
+                        DateTimeFormatter.ISO_LOCAL_DATE_TIME.format(
+                                ZonedDateTime.now()
+                        ).replaceAll(":", "-")
                 )
-        ));
-//        Map<String, ArtistReference> artistReferences = dao.findAllArtistReferences()
-//                .stream()
-//                .collect(Collectors.toMap(artist -> artistIdToName.get(artist.getId()),
-//                        UnaryOperator.identity()));
-        Map<ArrayList<String>, Album> albums = catalogAlbums(rootMp3Folder, artistReferences);
-        Map<String, ArrayList<String>> albumIdToName = albums.entrySet()
-                .stream()
-                .collect(Collectors.toMap(entry -> entry.getValue().getId(), Map.Entry::getKey));
-        Map<ArrayList<String>, AlbumReference> albumReferences = albums.values().stream().collect(Collectors.toMap(
-                album -> albumIdToName.get(album.getId()),
-                album -> ExceptionalSupplier.wrap(
-                        () -> jsonAdapter.readValue(
-                                jsonAdapter.writeValueAsString(album),
-                                AlbumReference.class
-                        )
-                )
-        ));
-//        Map<ArrayList<String>, AlbumReference> albumReferences = dao.findAllAlbumReferences()
-//                .stream()
-//                .collect(Collectors.toMap(album -> albumIdToName.get(album.getId()),
-//                        UnaryOperator.identity()));
-        catalogTracks(rootMp3Folder, artistReferences, albumReferences);
-//        printDbSummary();
-//        dao.close(true);
-//        dao.commit();
+        );
+        System.out.printf("Report will be written to %s.%n", outputFile.getAbsolutePath());
+        return CsvFileWriter.from(
+                outputFile,
+                CataloguerReportFactory.DEFAULT_HEADER
+        );
+    }
+
+    private synchronized void writeReportRow(List<String> row) {
+        reportWriter.writeRow(row);
+    }
+
+    void catalogMusic() throws IOException {
+        try (CsvFileWriter csvFileWriter = newReportWriter()) {
+            csvFileWriter.writeHeader();
+            this.reportWriter = csvFileWriter;
+            //
+            S3MediaFolder rootFolderReference = s3MusicDao.recurseMediaFolder();
+            Mp3Folder rootMp3Folder = catalogMusicFolder(rootFolderReference, 0);
+            printFolderSummary(rootMp3Folder);
+            Map<String, Artist> artists = catalogArtists(rootMp3Folder);
+            Map<String, String> artistIdToName = artists.entrySet()
+                    .stream()
+                    .collect(Collectors.toMap(entry -> entry.getValue().getId(), Map.Entry::getKey));
+            Map<String, ArtistReference> artistReferences = artists.values().stream().collect(Collectors.toMap(
+                    artist -> artistIdToName.get(artist.getId()),
+                    artist -> ExceptionalSupplier.wrap(
+                            () -> jsonAdapter.readValue(
+                                    jsonAdapter.writeValueAsString(artist),
+                                    ArtistReference.class
+                            )
+                    )
+            ));
+            Map<ArrayList<String>, Album> albums = catalogAlbums(rootMp3Folder, artistReferences);
+            Map<String, ArrayList<String>> albumIdToName = albums.entrySet()
+                    .stream()
+                    .collect(Collectors.toMap(entry -> entry.getValue().getId(), Map.Entry::getKey));
+            Map<ArrayList<String>, AlbumReference> albumReferences = albums.values().stream().collect(Collectors.toMap(
+                    album -> albumIdToName.get(album.getId()),
+                    album -> ExceptionalSupplier.wrap(
+                            () -> jsonAdapter.readValue(
+                                    jsonAdapter.writeValueAsString(album),
+                                    AlbumReference.class
+                            )
+                    )
+            ));
+            deduplicateAndCatalogTracks(rootMp3Folder, artistReferences, albumReferences);
+        } finally {
+            this.reportWriter = null;
+        }
     }
 
     private void printFolderSummary(Mp3Folder rootMp3Folder) {
@@ -216,105 +195,135 @@ class PrivateMusicCataloguer {
                         .collect(Collectors.joining()));
     }
 
-//    private void printDbSummary() {
-//        for (Class<?> clazz : asArrayList(Locale.class,
-//                MusicGroupCatalog.class,
-//                MusicAlbumCatalog.class,
-//                MusicRecordingCatalog.class,
-//                Artist.class,
-//                ArtistReference.class,
-//                Album.class,
-//                AlbumReference.class,
-//                Track.class,
-//                EntityName.class,
-//                AlternateNames.class,
-//                Popularity.class,
-//                PopularityOverride.class,
-//                Art.class,
-//                ArtSource.class)) {
-//            System.out.printf("Total %s objects: %s%n", clazz.getSimpleName(), dao.count(clazz));
-//        }
-//    }
-
-    private Map<String, Artist> catalogArtists(Mp3Folder rootMp3Folder) throws IOException {
+    private Map<String, Artist> catalogArtists(Mp3Folder rootMp3Folder) {
         Map<String, Artist> artists = new HashMap<>();
         List<Mp3Folder> folders = asArrayList(rootMp3Folder);
         while (!folders.isEmpty()) {
             Mp3Folder folder = folders.remove(0);
             folders.addAll(folder.getChildren());
-            folder.getUniqueArtistNames().forEach(artistName -> {
+            for (String artistName : folder.getUniqueArtistNames()) {
                 if (!artists.containsKey(artistName)) {
-                    artists.put(artistName, entityFactory.newArtistEntity(artistName,
-                            Optional.ofNullable(folder.getArt()).orElse(defaultArt)));
+                    Collection<Artist> existingMatches = preexistingCatalog.matchArtistsByName(artistName);
+                    Art art = Optional.ofNullable(folder.getArt()).orElse(defaultArt);
+                    Artist artist;
+                    if (existingMatches == null || existingMatches.isEmpty()) {
+                        artist = entityFactory.newArtistEntity(artistName, art);
+                        if (live) {
+                            catalogDao.save(artist);
+                        }
+                    } else {
+                        if (live) {
+                            for (Artist existingArtist : existingMatches) {
+                                existingArtist.setArt(art);
+                                existingArtist.setLastUpdatedTime(ZonedDateTime.now());
+                                catalogDao.save(existingArtist);
+                            }
+                        }
+                        artist = existingMatches.iterator().next();
+                    }
+                    artists.put(artistName, artist);
+                    writeReportRow(toReportRow(artist, existingMatches));
                 }
-            });
+            }
         }
-        MusicGroupCatalog catalog = new MusicGroupCatalog();
-        catalog.setEntities(new ArrayList<>(artists.values()));
-        catalog.setLocales(asArrayList(en_US));
-        artists.values().forEach(catalogDAO::save);
-//        dao.save(catalog);
         return artists;
     }
 
     private Map<ArrayList<String>, Album> catalogAlbums(Mp3Folder rootMp3Folder,
-                                                        Map<String, ArtistReference> artists) throws IOException {
+                                                        Map<String, ArtistReference> artists) {
         Map<ArrayList<String>, Album> albums = new HashMap<>();
         List<Mp3Folder> folders = asArrayList(rootMp3Folder);
         while (!folders.isEmpty()) {
             Mp3Folder folder = folders.remove(0);
             folders.addAll(folder.getChildren());
-            folder.getUniqueAlbumNames().forEach(albumKey -> {
+            for (AlbumKey albumKey : folder.getUniqueAlbumNames()) {
                 ArrayList<String> keyAsList = new ArrayList<>(albumKey.toList());
                 if (!albums.containsKey(keyAsList)) {
-                    albums.put(keyAsList, entityFactory.newAlbumEntity(albumKey.getAlbumName(),
-                            artists.get(albumKey.getArtistName()),
-                            Optional.ofNullable(folder.getArt()).orElse(defaultArt)));
+                    Collection<Album> existingMatches = preexistingCatalog.matchAlbumsByNaturalKey(albumKey);
+                    Art art = Optional.ofNullable(folder.getArt()).orElse(defaultArt);
+                    Album album;
+                    if (existingMatches == null || existingMatches.isEmpty()) {
+                        album = entityFactory.newAlbumEntity(albumKey.getAlbumName(),
+                                artists.get(albumKey.getArtistName()),
+                                art);
+                        if (live) {
+                            catalogDao.save(album);
+                        }
+                    } else {
+                        if (live) {
+                            for (Album existingAlbum : existingMatches) {
+                                existingAlbum.setArt(art);
+                                existingAlbum.setLastUpdatedTime(ZonedDateTime.now());
+                                catalogDao.save(existingAlbum);
+                            }
+                        }
+                        album = existingMatches.iterator().next();
+                    }
+                    albums.put(keyAsList, album);
+                    writeReportRow(toReportRow(album, existingMatches));
                 }
-            });
+            }
         }
-        MusicAlbumCatalog catalog = new MusicAlbumCatalog();
-        catalog.setEntities(new ArrayList<>(albums.values()));
-        catalog.setLocales(asArrayList(en_US));
-        albums.values().forEach(catalogDAO::save);
-//        dao.save(catalog);
         return albums;
     }
 
-    private void catalogTracks(Mp3Folder rootMp3Folder,
-                               Map<String, ArtistReference> artists,
-                               Map<ArrayList<String>, AlbumReference> albums) throws IOException {
+    private Track newTrackEntity(
+            TrackMetadata metadata,
+            Mp3Folder folder,
+            Map<String, ArtistReference> artists,
+            Map<ArrayList<String>, AlbumReference> albums
+    ) throws JsonProcessingException {
+        Set<String> trackArtistNames = Optional.of(metadata.getDistinctArtistNames())
+                .map(Map::keySet)
+                .filter(Predicate.not(Set::isEmpty))
+                .orElse(Set.of("Unknown"));
+        List<ArtistReference> trackArtists = trackArtistNames.stream()
+                .map(artists::get)
+                .collect(Collectors.toList());
+        System.out.println(jsonAdapter.writeValueAsString(metadata));
+        AlbumReference trackAlbum = trackArtistNames.stream().filter(Objects::nonNull).map(
+                metadata::buildAlbumKey
+        ).map(albums::get).filter(Objects::nonNull).findAny().get();
+        return entityFactory.newTrackEntity(metadata,
+                buildUrl(metadata.getFilePath()),
+                trackArtists,
+                trackAlbum,
+                Optional.ofNullable(folder.getArt()).orElse(defaultArt));
+    }
+
+    public static class ArrayListValueHashMap<K, V> extends HashMap<K, List<V>> {
+        private List<V> newArrayList(K key) {
+            return new ArrayList<>();
+        }
+
+        public List<V> computeNewListIfAbsent(K key) {
+            return computeIfAbsent(
+                    key,
+                    this::newArrayList
+            );
+        }
+    }
+
+    private void deduplicateAndCatalogTracks(Mp3Folder rootMp3Folder,
+                                             Map<String, ArtistReference> artists,
+                                             Map<ArrayList<String>, AlbumReference> albums) throws IOException {
         List<Track> tracks = new ArrayList<>();
-        Map<String, List<Track>> childTracksByArtistId = new HashMap<>();
-        Map<String, List<Track>> childTracksByAlbumId = new HashMap<>();
+        ArrayListValueHashMap<String, Track> childTracksByArtistId = new ArrayListValueHashMap<>();
+        ArrayListValueHashMap<String, Track> childTracksByAlbumId = new ArrayListValueHashMap<>();
         List<Mp3Folder> mp3Folders = asArrayList(rootMp3Folder);
         Map<String, String> trackUrlsById = new HashMap<>();
+
         while (!mp3Folders.isEmpty()) {
             Mp3Folder folder = mp3Folders.remove(0);
             mp3Folders.addAll(folder.getChildren());
             for (TrackMetadata metadata : folder.getMp3s()) {
-                Set<String> trackArtistNames = Optional.of(metadata.getDistinctArtistNames())
-                        .map(Map::keySet)
-                        .filter(Predicate.not(Set::isEmpty))
-                        .orElse(Set.of("Unknown"));
-                List<ArtistReference> trackArtists = trackArtistNames.stream()
-                        .map(artists::get)
-                        .collect(Collectors.toList());
-                System.out.println(jsonAdapter.writeValueAsString(metadata));
-                AlbumReference trackAlbum = trackArtistNames.stream().filter(Objects::nonNull).map(
-                        trackArtistName -> asArrayList(
-                                trackArtistName,
-                                metadata.getAlbum()
-                        )
-                ).map(albums::get).filter(Objects::nonNull).findAny().get();
-                Track trackEntity = entityFactory.newTrackEntity(metadata,
-                        buildUrl(metadata.getFilePath()),
-                        trackArtists,
-                        trackAlbum,
-                        Optional.ofNullable(folder.getArt()).orElse(defaultArt));
+                Track trackEntity = newTrackEntity(
+                        metadata, folder, artists, albums
+                );
                 if (trackUrlsById.containsKey(trackEntity.getId())) {
                     System.out.printf(
-                            "Track appears to be a duplicate:%n\tEntity ID: %s%n\tTrack URL: %s%n\tPotential Duplicate URL: %s%n",
+                            "Track appears to be a duplicate:%n\tEntity ID: %s%n\tTrack URL: %s%n\tPotential " +
+                                    "Duplicate URL: %s%n",
                             trackEntity.getId(),
                             trackUrlsById.get(trackEntity.getId()),
                             trackEntity.getUrl()
@@ -323,229 +332,122 @@ class PrivateMusicCataloguer {
                     tracks.add(trackEntity);
                     trackUrlsById.put(trackEntity.getId(), trackEntity.getUrl());
                     for (ArtistReference artistReference : trackEntity.getArtists()) {
-                        System.out.println(
-                                jsonAdapter.writeValueAsString(artistReference)
-                        );
-                        childTracksByArtistId.computeIfAbsent(
-                                artistReference.getId(),
-                                artistId -> new ArrayList<>()
+//                        System.out.println(
+//                                jsonAdapter.writeValueAsString(artistReference)
+//                        );
+                        childTracksByArtistId.computeNewListIfAbsent(
+                                artistReference.getId()
                         ).add(trackEntity);
                     }
                     for (AlbumReference albumReference : trackEntity.getAlbums()) {
-                        childTracksByAlbumId.computeIfAbsent(
-                                albumReference.getId(),
-                                artistId -> new ArrayList<>()
+                        childTracksByAlbumId.computeNewListIfAbsent(
+                                albumReference.getId()
                         ).add(trackEntity);
                     }
                 }
+                writeReportRow(toReportRow(trackEntity,
+                        preexistingCatalog.findTrackById(trackEntity.getId()),
+                        preexistingCatalog.matchTracksByArtistAlbumAndName(trackEntity)));
             }
         }
-//        for(List<Track>artistTracks : childTracksByArtistId.values()) {
-//            artistTracks.sort(
-//                    Comparator.<Track,Long>comparing(
-//                            track -> track.getAlbums().get(0).getNaturalOrder()
-//                    ).thenComparing(
-//                            track -> track.getAlbums().get(0).getNames().get(0).getValue()
-//                    ).thenComparing(
-//                            Track::getNaturalOrder
-//                    )
-//            );
-//        }
-//        for(List<Track>albumTracks : childTracksByAlbumId.values()) {
-//            albumTracks.sort(Comparator.comparing(Track::getNaturalOrder));
-//        }
-        MusicRecordingCatalog trackCatalog = new MusicRecordingCatalog();
-        trackCatalog.setEntities(tracks);
-        trackCatalog.setLocales(asArrayList(en_US));
-//        dao.save(trackCatalog);
-//        tracks.forEach(catalogDAO::save);
-        ExecutorService threadPoolExecutor = Executors.newFixedThreadPool(20);
-        List<Future<Track>> tasks = new ArrayList<>();
-        try {
-            tasks.addAll(
-                    threadPoolExecutor.invokeAll(
-                            tracks.stream().<Callable<Track>>map(
-                                    track -> () -> {
-                                        try {
-                                            catalogDAO.save(track);
-                                        } catch (RuntimeException e) {
-                                            System.out.printf(
-                                                    "Failure:%n\t%s%n",
-                                                    jsonAdapter.writeValueAsString(track)
-                                            );
-                                            throw e;
-                                        }
-                                        return track;
-                                    }
-                            ).collect(Collectors.toList())
-                    )
-            );
-            tasks.addAll(
-                    threadPoolExecutor.invokeAll(
-                            childTracksByArtistId.entrySet().stream().<Callable<Track>>map(
-                                    artistIdChildTracks -> () -> {
-//                                        try {
-                                        catalogDAO.saveChildTrackAssociations(
-                                                Artist.class,
-                                                artistIdChildTracks.getKey(),
-                                                artistIdChildTracks.getValue().stream().sorted(
-                                                        Comparator.<Track, Long>comparing(
-                                                                track -> track.getAlbums()
-                                                                        .stream()
-                                                                        .map(
-                                                                                albumReference -> Optional.ofNullable(albumReference.getNaturalOrder())
-                                                                                        .orElse(0L)
-                                                                        )
-                                                                        .findAny()
-                                                                        .orElse(0L)
-                                                        ).thenComparing(
-                                                                track -> track.getAlbums().stream().flatMap(
-                                                                        albumReference -> albumReference.getNames()
-                                                                                .stream()
-                                                                ).map(EntityName::getValue).findAny().orElse("")
-                                                        ).thenComparing(
-                                                                track -> Optional.ofNullable(track.getNaturalOrder())
-                                                                        .orElse(0L)
-                                                        )
-                                                ).collect(Collectors.toList())
-                                        );
-//                                        } catch (RuntimeException e) {
-//                                            System.out.printf(
-//                                                    "Failure:%n\t%s%n",
-//                                                    jsonAdapter.writeValueAsString(track)
-//                                            );
-//                                            throw e;
-//                                        }
-                                        return null;
-                                    }
-                            ).collect(Collectors.toList())
-                    )
-            );
-            tasks.addAll(
-                    threadPoolExecutor.invokeAll(
-                            childTracksByAlbumId.entrySet().stream().<Callable<Track>>map(
-                                    albumIdChildTracks -> () -> {
-                                        catalogDAO.saveChildTrackAssociations(
-                                                Album.class,
-                                                albumIdChildTracks.getKey(),
-                                                albumIdChildTracks.getValue().stream().sorted(
-                                                        Comparator.comparing(
-                                                                track -> Optional.ofNullable(track.getNaturalOrder())
-                                                                        .orElse(0L)
-                                                        )
-                                                ).collect(Collectors.toList())
-                                        );
-                                        return null;
-                                    }
-                            ).collect(Collectors.toList())
-                    )
-            );
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        } finally {
-            threadPoolExecutor.shutdown();
-        }
-        for (Future<Track> task : tasks) {
-            try {
-                Track success = task.get();
-                System.out.printf(
-                        "Success:%n\t%s%n",
-                        jsonAdapter.writeValueAsString(success)
-                );
-            } catch (InterruptedException | ExecutionException e) {
-                throw new RuntimeException(e);
-            }
+        if (live) {
+            bulkTrackPersistence.saveTracksToCatalog(tracks, childTracksByArtistId, childTracksByAlbumId);
         }
     }
 
-    private Mp3Folder collectTrackInfoRecursivelyS3(String s3Prefix, int level) {
+    private Mp3Folder catalogMusicFolder(S3MediaFolder folderReference, int level) {
         List<Mp3Folder> children = new ArrayList<>();
-        List<CommonPrefix> commonPrefixes = new ArrayList<>();
-        List<S3Object> s3Objects = new ArrayList<>();
-        for (ListObjectsV2Response response : s3Client.listObjectsV2Paginator(
-                ListObjectsV2Request.builder().bucket(
-                        sourceS3BucketName
-                ).delimiter(
-                        "/" // DO NOT forget this!
-                ).prefix(
-                        s3Prefix
-                ).build()
-        )) {
-            commonPrefixes.addAll(response.commonPrefixes());
-            s3Objects.addAll(response.contents());
-        }
-        List<TrackMetadata> mp3s = collectTrackMetadataS3(s3Objects);
-        if (!mp3s.isEmpty()) {
-            commonPrefixes.clear();
-        }
-        for (CommonPrefix subdir : commonPrefixes) {
-            Mp3Folder child = collectTrackInfoRecursivelyS3(subdir.prefix(), level + 1);
+        List<TrackMetadata> mp3s = catalogMusicTracks(folderReference.getMusicFiles());
+        for (S3MediaFolder subfolderReference : folderReference.getSubfolders()) {
+            Mp3Folder child = catalogMusicFolder(subfolderReference, level + 1);
             children.add(child);
             System.out.printf(
                     "Found %s MP3s under S3 prefix %s.%n",
                     child.recurseMp3s().count(),
-                    subdir.prefix()
+                    subfolderReference.getS3Key()
             );
         }
-        return new Mp3Folder(mp3s, collectAlbumArtS3(s3Objects), level, children);
+        return new Mp3Folder(mp3s, catalogAlbumArt(folderReference.getArtFiles()), level, children);
     }
 
-    private String removeRootS3Prefix(String s3PrefixOrKey) {
-        return s3PrefixOrKey.replaceAll("^" + Pattern.quote(sourceS3Prefix), "");
-    }
+    private class TrackMetadataParser {
+        private S3MediaFile musicFile;
 
-    private TrackMetadata parseTrackMetadataS3(S3Object s3Object) {
-        String filePath = removeRootS3Prefix(s3Object.key());
-        TrackMetadata trackMetadata = catalogDAO.findTrackMetadata(filePath);
-        if (trackMetadata != null) {
+        public TrackMetadataParser(S3MediaFile musicFile) {
+            this.musicFile = musicFile;
+        }
+
+        public TrackMetadata parseTrackMetadata() {
+            TrackMetadata trackMetadata = (
+                    live ?
+                            catalogDao.findTrackMetadata(musicFile.getPath()) :
+                            null
+            );
+            if (trackMetadata != null) {
+                System.out.printf(
+                        "Track metadata found in DynamoDB for S3 object %s.%n",
+                        musicFile.getS3Key()
+                );
+                return trackMetadata;
+            }
             System.out.printf(
-                    "Track metadata found in DynamoDB for S3 object %s.%n",
-                    s3Object.key()
+                    "Retrieving S3 object %s.%n",
+                    musicFile.getS3Key()
             );
-            return trackMetadata;
-        }
-        System.out.printf(
-                "Retrieving S3 object %s.%n",
-                s3Object.key()
-        );
-        try (InputStream s3InputStream = s3Client.getObject(
-                GetObjectRequest.builder().bucket(
-                        sourceS3BucketName
-                ).key(
-                        s3Object.key()
-                ).build()
-        )) {
-            TrackMetadata track = mp3Adapter.parseMetadata(
-                    s3InputStream
-            );
-            track.setFilePath(filePath);
-//            track.setAuthor(Optional.ofNullable(track.getAuthor()).orElse("Unknown"));
-            track.setAlbum(Optional.ofNullable(track.getAlbum()).orElse("Unknown"));
-            track.setTitle(Optional.ofNullable(track.getTitle()).orElse("Unknown"));
-            return track;
-        } catch (IOException | InvalidAudioFrameException | TagException | ReadOnlyFileException e) {
-            throw new RuntimeException(String.format("Failure retrieving or parsing %s.", s3Object.key()), e);
+            try (InputStream s3InputStream = s3Client.getObject(
+                    GetObjectRequest.builder().bucket(
+                            sourceS3BucketName
+                    ).key(
+                            musicFile.getS3Key()
+                    ).build()
+            )) {
+                TrackMetadata track = mp3Adapter.parseMetadata(
+                        s3InputStream
+                );
+                track.setFilePath(musicFile.getPath());
+                track.setAlbum(Optional.ofNullable(track.getAlbum()).orElse("Unknown"));
+                track.setTitle(Optional.ofNullable(track.getTitle()).orElse("Unknown"));
+                return track;
+            } catch (IOException | InvalidAudioFrameException | TagException | ReadOnlyFileException e) {
+                throw new RuntimeException(String.format("Failure retrieving or parsing %s.", musicFile.getS3Key()), e);
+            }
         }
     }
 
-    private List<TrackMetadata> collectTrackMetadataS3(List<S3Object> s3Objects) {
+    private Callable<TrackMetadata> newTrackMetadataParsingTask(S3MediaFile musicFile) {
+        return new TrackMetadataParser(musicFile)::parseTrackMetadata;
+    }
+
+    private class TrackMetadataPersistenceTask {
+        private TrackMetadata trackMetadata;
+
+        public TrackMetadataPersistenceTask(TrackMetadata trackMetadata) {
+            this.trackMetadata = trackMetadata;
+        }
+
+        public void saveTrackMetadata() {
+            catalogDao.save(trackMetadata);
+        }
+    }
+
+    private List<TrackMetadata> catalogMusicTracks(List<S3MediaFile> musicFiles) {
         List<TrackMetadata> trackMetadataList = new ArrayList<>();
-        List<S3Object> mp3s = s3Objects.stream()
-                .filter(s3Object -> s3Object.key().toLowerCase().endsWith(MP3EXT))
-                .collect(Collectors.toList());
         ExecutorService executor = Executors.newFixedThreadPool(10);
         try {
-            List<Future<TrackMetadata>> tasks = executor.invokeAll(mp3s.stream()
-                    .<Callable<TrackMetadata>>map(s3Object -> (() -> parseTrackMetadataS3(s3Object)))
+            List<Future<TrackMetadata>> tasks = executor.invokeAll(musicFiles.stream()
+                    .map(this::newTrackMetadataParsingTask)
                     .collect(Collectors.toList()));
             for (Future<TrackMetadata> task : tasks) {
                 trackMetadataList.add(task.get());
             }
             List<Future<?>> persistenceTasks = new ArrayList<>();
             for (TrackMetadata trackMetadata : trackMetadataList) {
-                persistenceTasks.add(executor.submit(
-                        () -> catalogDAO.save(trackMetadata)
-                ));
+                if (live) {
+                    persistenceTasks.add(executor.submit(
+                            new TrackMetadataPersistenceTask(trackMetadata)::saveTrackMetadata
+                    ));
+                }
+                writeReportRow(toReportRow(trackMetadata));
             }
             for (Future<?> persistenceTask : persistenceTasks) {
                 persistenceTask.get();
@@ -558,25 +460,19 @@ class PrivateMusicCataloguer {
         return trackMetadataList;
     }
 
-    private List<ImageMetadata> collectAlbumArtS3(List<S3Object> s3Objects) {
-        List<S3Object> jpgs = s3Objects.stream()
-                .filter(
-                        s3Object -> Arrays.stream(s3Object.key().toLowerCase().split("/"))
-                                .reduce((x, y) -> y)
-                                .map(name ->
-                                        (name.startsWith("ALBUM~") || name.startsWith("AlbumArt")) && name.endsWith(JPGEXT))
-                                .orElse(false)
-                ).collect(Collectors.toList());
-        return jpgs.stream().map(jpg -> {
-            try (InputStream s3InputStream = s3Client.getObject(GetObjectRequest.builder()
-                    .bucket(sourceS3BucketName)
-                    .key(jpg.key())
-                    .build())) {
-                return newImageMetadata(s3InputStream, buildUrl(removeRootS3Prefix(jpg.key())));
-            } catch (IOException e) {
-                throw new RuntimeException("Failed to access image " + jpg.key() + ".", e);
-            }
-        }).distinct().collect(Collectors.toList());
+    private ImageMetadata parseImageMetadata(S3MediaFile imageFile) {
+        try (InputStream s3InputStream = s3Client.getObject(GetObjectRequest.builder()
+                .bucket(sourceS3BucketName)
+                .key(imageFile.getS3Key())
+                .build())) {
+            return newImageMetadata(s3InputStream, buildImageUrl(imageFile.getPath()));
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to access image " + imageFile.getS3Key() + ".", e);
+        }
+    }
+
+    private List<ImageMetadata> catalogAlbumArt(List<S3MediaFile> albumArtFiles) {
+        return albumArtFiles.stream().map(this::parseImageMetadata).distinct().collect(Collectors.toList());
     }
 
     private ImageMetadata newImageMetadata(InputStream fis, String url) throws IOException {
@@ -607,6 +503,12 @@ class PrivateMusicCataloguer {
     private String buildUrl(String relativePath) {
         return String.format("%s/%s",
                 baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.lastIndexOf("/")) : baseUrl,
+                relativePath);
+    }
+
+    private String buildImageUrl(String relativePath) {
+        return String.format("%s/%s",
+                imageBaseUrl.endsWith("/") ? imageBaseUrl.substring(0, imageBaseUrl.lastIndexOf("/")) : imageBaseUrl,
                 relativePath);
     }
 

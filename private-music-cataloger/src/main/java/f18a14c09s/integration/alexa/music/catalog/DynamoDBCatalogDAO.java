@@ -32,12 +32,14 @@ import java.util.stream.Collectors;
  * Return the first item.
  * <p>
  * GetPreviousItem:
- * Either list and sort all of the artist/album's tracks or find the artist/album's track immediately preceding current track.
+ * Either list and sort all of the artist/album's tracks or find the artist/album's track immediately preceding
+ * current track.
  * Same DynamoDB query as Initiate.
  * Iterate the result list until the current track is found, then return the previous item if it exists.
  * <p>
  * GetNextItem:
- * Either list and sort all of the artist/album's tracks or find the artist/album's track immediately following current track.
+ * Either list and sort all of the artist/album's tracks or find the artist/album's track immediately following
+ * current track.
  * Same DynamoDB query as Initiate.
  * Iterate the result list until the current track is found, then return the next item if it exists.
  */
@@ -45,6 +47,25 @@ public class DynamoDBCatalogDAO {
     private String stringPkStringSkTableName;
     private String stringPkNumericSkTableName;
     private DynamoDbEnhancedClient dynamodbClient;
+
+    private static class ClassSpecificTableSchemas {
+        public static final TableSchema<ArtistItem> ARTIST = TableSchema.fromBean(ArtistItem.class);
+        public static final TableSchema<AlbumItem> ALBUM = TableSchema.fromBean(AlbumItem.class);
+        public static final TableSchema<TrackItem> TRACK = TableSchema.fromBean(TrackItem.class);
+        public static final TableSchema<ArtistDeletionItem>
+                ARTIST_DELETION =
+                TableSchema.fromBean(ArtistDeletionItem.class);
+        public static final TableSchema<AlbumDeletionItem>
+                ALBUM_DELETION =
+                TableSchema.fromBean(AlbumDeletionItem.class);
+        public static final TableSchema<TrackDeletionItem>
+                TRACK_DELETION =
+                TableSchema.fromBean(TrackDeletionItem.class);
+        public static final TableSchema<TrackMetadataItem>
+                TRACK_METADATA =
+                TableSchema.fromBean(TrackMetadataItem.class);
+        public static final TableSchema<ChildTrackItem> CHILD_TRACK = TableSchema.fromBean(ChildTrackItem.class);
+    }
 
     public DynamoDBCatalogDAO(
             String stringPkStringSkTableName,
@@ -63,15 +84,15 @@ public class DynamoDBCatalogDAO {
     }
 
     public void save(Track musicEntity) {
-        saveMusicEntity(musicEntity, new TrackItem(), TrackItem.class);
+        saveMusicEntity(musicEntity, new TrackItem(), ClassSpecificTableSchemas.TRACK);
     }
 
     public void save(Album musicEntity) {
-        saveMusicEntity(musicEntity, new AlbumItem(), AlbumItem.class);
+        saveMusicEntity(musicEntity, new AlbumItem(), ClassSpecificTableSchemas.ALBUM);
     }
 
     public void save(Artist musicEntity) {
-        saveMusicEntity(musicEntity, new ArtistItem(), ArtistItem.class);
+        saveMusicEntity(musicEntity, new ArtistItem(), ClassSpecificTableSchemas.ARTIST);
     }
 
     public void save(TrackMetadata trackMetadata) {
@@ -83,7 +104,7 @@ public class DynamoDBCatalogDAO {
         dynamodbItem.setData(trackMetadata);
         saveEntityWithStringSortKey(
                 dynamodbItem,
-                TrackMetadataItem.class
+                ClassSpecificTableSchemas.TRACK_METADATA
         );
     }
 
@@ -102,7 +123,7 @@ public class DynamoDBCatalogDAO {
             );
             dynamodbItem.setSk(i);
             dynamodbItem.setTrackId(presortedChildTracks.get(i).getId());
-            saveEntityWithNumericSortKey(dynamodbItem, ChildTrackItem.class);
+            saveEntityWithNumericSortKey(dynamodbItem, ClassSpecificTableSchemas.CHILD_TRACK);
         }
     }
 
@@ -118,7 +139,7 @@ public class DynamoDBCatalogDAO {
         deletion.setEntity(entity);
         saveEntityWithStringSortKey(
                 deletion,
-                TrackDeletionItem.class
+                ClassSpecificTableSchemas.TRACK_DELETION
         );
     }
 
@@ -135,7 +156,7 @@ public class DynamoDBCatalogDAO {
         deletion.setDeletionSource(source);
         saveEntityWithStringSortKey(
                 deletion,
-                AlbumDeletionItem.class
+                ClassSpecificTableSchemas.ALBUM_DELETION
         );
     }
 
@@ -152,27 +173,29 @@ public class DynamoDBCatalogDAO {
         deletion.setDeletionSource(source);
         saveEntityWithStringSortKey(
                 deletion,
-                ArtistDeletionItem.class
+                ClassSpecificTableSchemas.ARTIST_DELETION
         );
     }
 
-    private <E extends BaseEntity, DE extends AbstractMusicEntityItem<E>> void saveMusicEntity(E entity, DE dynamoDbItem, Class<DE> clazz) {
+    private <E extends BaseEntity, DE extends AbstractMusicEntityItem<E>> void saveMusicEntity(E entity,
+                                                                                               DE dynamoDbItem,
+                                                                                               TableSchema<DE> tableSchema) {
         dynamoDbItem.setEntity(entity);
         dynamoDbItem.setPk(AbstractMusicEntityItem.formatPartitionKey(entity.getClass()));
         dynamoDbItem.setSk(AbstractMusicEntityItem.formatSortKey(entity.getId()));
-        saveEntityWithStringSortKey(dynamoDbItem, clazz);
+        saveEntityWithStringSortKey(dynamoDbItem, tableSchema);
     }
 
-    private <E> void saveEntityWithStringSortKey(E entity, Class<E> clazz) {
+    private <E> void saveEntityWithStringSortKey(E entity, TableSchema<E> tableSchema) {
         DynamoDbTable<E> catalogTableWithEntitySpecificSchema = dynamodbClient.table(
-                stringPkStringSkTableName, TableSchema.fromBean(clazz)
+                stringPkStringSkTableName, tableSchema
         );
         catalogTableWithEntitySpecificSchema.putItem(entity);
     }
 
-    private <E> void saveEntityWithNumericSortKey(E entity, Class<E> clazz) {
+    private <E> void saveEntityWithNumericSortKey(E entity, TableSchema<E> tableSchema) {
         DynamoDbTable<E> catalogTableWithEntitySpecificSchema = dynamodbClient.table(
-                stringPkNumericSkTableName, TableSchema.fromBean(clazz)
+                stringPkNumericSkTableName, tableSchema
         );
         catalogTableWithEntitySpecificSchema.putItem(entity);
     }
